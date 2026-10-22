@@ -1,0 +1,25 @@
+# PulseLens config, read by server/pulselens/config.py. PROVISIONAL values carry their source.
+planner:
+  capable_min_fps: 20          # PROVISIONAL: old repo profile band edge
+  light_min_fps: 12            # below this the light challenge is not run (old repo quality.min_fps)
+  brightness_range: [40, 220]  # mean luma; above 220 = too bright for the screen light to matter
+  min_face_fraction: 0.02
+challenge:
+  baseline_ms: 1500
+  hues_deg: [40, 80, 140, 200, 250, 300]   # no red: nothing in [345, 15]
+  turn_gap_ms: 1000
+  capable:     {colour_steps: 6, dwell_ms: 400, gap_ms: [700, 1300], turn_ms: 3000}
+  constrained: {colour_steps: 4, dwell_ms: 700, gap_ms: [1000, 1600], turn_ms: 3500}
+  no_flash:    {turn_ms: 3500}
+capture:
+  desktop_size: [640, 480]
+  mobile_size: [480, 360]
+  jpeg_quality: 0.9
+  upload_batch_ms: 1000
+session:
+  ttl_min: 15
+  max_frames: 900
+  max_batch_frames: 30
+  max_jpeg_kb: 200
+analysis:
+  timeout_s: 120
