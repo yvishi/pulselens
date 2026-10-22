@@ -13,7 +13,7 @@ include = ["pulselens*"]
 
 [tool.pytest.ini_options]
 testpaths = ["server/tests"]
-pythonpath = ["server"]
+pythonpath = ["server", "."]
 addopts = "-q"
 
 [tool.ruff]
