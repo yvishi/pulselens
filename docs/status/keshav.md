@@ -22,6 +22,18 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - **K1: tests run from the repo root** with `pytest -c server/pyproject.toml --rootdir .` (`pythonpath = ["server"]`), so `testpaths = ["server/tests"]` resolves as the task asks.
 
 ## Measurements
+- **Real recordings through the real pipeline (2026-10-23).** Six old-prototype sessions (P01, D01 laptop webcam, Brave) converted with `eval/convert_v2.py` (local only, `data/converted`), then K4 runner + K5 integrity + K6 fusion with Ganeev's G1–G6 `analyze()` (local merge, not pushed). 3–12 s per session including face landmarks.
+
+  | Session | Recorded as | fps | Decision | Driven by |
+  |---|---|---|---|---|
+  | 4e5a24 | genuine | 15.6 | PASS | light.response 6/6 at 93 ms; face_neck usable (face/neck 0.54×); background 2% of the face |
+  | b4fec5 | genuine, close-up | 15.6 | PASS | light.response 6/6 at 59 ms; face_neck and background abstain (no neck, no background in frame) |
+  | 3c56bd | genuine | 15.6 | RETRY fresh_challenge | **light.response flags a genuine face** (2/6 answered, 1 wrong colour): face and neck both near the noise on 4 flashes, first flash drifting before the pulse |
+  | d79105 | live swap | 5.0 | RETRY fresh_challenge | sensor.duplicates 72.4%; light abstains (< 12 fps) |
+  | 58484b | live swap | 8.2 | RETRY fresh_challenge | sensor.duplicates 7.3%; light abstains |
+  | aedba3 | live swap | 10.3 | RETRY no_flash | low coverage: only B usable, light abstains with quality.low_fps |
+
+  For S2: (1) `3c56bd` is real evidence for Ganeev's `max_silent_threshold` (G3): a weak-echo genuine session should abstain, not flag. (2) No swap reaches HUMAN_REVIEW because only family B flags; mode probe, switch latency, camera name and face-vs-neck sharpness (the V2 findings) are all family B too, so a sub-12-fps swap stays RETRY → agent_checks on attempt 2 unless C or D (head turn) flags.
 
 ## Blocked
 
