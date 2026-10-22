@@ -1,16 +1,13 @@
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from pulselens.analysis.checks.light_response import run as light_response
-from pulselens.analysis.context import RegionSeries, build_context
+from pulselens.analysis.context import RegionSeries
 from pulselens.analysis.quality import assess, face_luma
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.linearize import srgb_to_linear
-from pulselens.bundle import load_bundle
 from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, TurnStep
-from tests.fixtures.synth import make_session
 
 W = 320
 THRESHOLDS = Thresholds.load()
@@ -124,13 +121,13 @@ def test_face_luma_is_the_srgb_luma_of_the_linear_mean() -> None:
 # --- wired into the context and light.response ------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def genuine_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return make_session(tmp_path_factory.mktemp("q"), kind="genuine")
+@pytest.fixture
+def genuine_ctx(synth):
+    return synth.context(kind="genuine")
 
 
-def test_build_context_fills_the_quality_report(genuine_path: Path) -> None:
-    ctx = build_context(load_bundle(genuine_path), THRESHOLDS)
+def test_build_context_fills_the_quality_report(genuine_ctx) -> None:
+    ctx = genuine_ctx
     assert set(ctx.quality.windows) == {"baseline", *(f"c{k}" for k in range(6)), "t0", "all"}
     assert all(w.usable for w in ctx.quality.windows.values())
 
@@ -140,8 +137,8 @@ def _requalify(ctx) -> None:
                          thresholds=ctx.thresholds)
 
 
-def test_light_response_abstains_with_the_window_reasons_when_too_dark(genuine_path: Path) -> None:
-    ctx = build_context(load_bundle(genuine_path), THRESHOLDS)
+def test_light_response_abstains_with_the_window_reasons_when_too_dark(genuine_ctx) -> None:
+    ctx = genuine_ctx
     for r in ctx.regions.values():
         r.rgb_linear *= 0.02  # chromaticity (and so the echo) is unchanged; only the brightness
     _requalify(ctx)
@@ -150,8 +147,8 @@ def test_light_response_abstains_with_the_window_reasons_when_too_dark(genuine_p
     assert "light.too_few_steps" in r.reason_codes and "quality.too_dark" in r.reason_codes
 
 
-def test_a_step_where_the_face_moved_is_left_out(genuine_path: Path) -> None:
-    ctx = build_context(load_bundle(genuine_path), THRESHOLDS)
+def test_a_step_where_the_face_moved_is_left_out(genuine_ctx) -> None:
+    ctx = genuine_ctx
     c0 = next(e for e in ctx.bundle.events if e.step_id == "c0")
     during = (ctx.t >= c0.painted_t_ms) & (ctx.t <= c0.ended_t_ms)
     ctx.face_box[during, 0] += np.arange(during.sum()) * 20.0  # 20 px a frame: fast sideways movement
