@@ -30,7 +30,7 @@ export default defineConfig({
       cwd: root,
       url: "http://127.0.0.1:8000/api/health",
       reuseExistingServer: false,
-      env: { PULSE_FAKE_ANALYSIS: "1", PULSE_DATA_DIR: "data/e2e" },
+      env: { PULSE_FAKE_ANALYSIS: "1", PULSE_DATA_DIR: "data/e2e", AGENT_PASSCODE: "e2e-passcode" },
     },
     { command: "npm run dev", url: "http://localhost:5173", reuseExistingServer: false },
   ],

@@ -1,4 +1,4 @@
-"""FastAPI app: health, the customer session API (K2) and the analysis runner (K4); agent routes arrive with K7."""
+"""FastAPI app: health, the customer session API (K2) and the analysis runner (K4), the agent API (K7)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from pulselens.api import sessions
+from pulselens.api import agent, sessions
 from pulselens.config import Settings, get_settings, load_config
 from pulselens.engine.runner import run_analysis
 from pulselens.engine.store import Clock, SessionStore, _wall_ms
@@ -53,6 +53,7 @@ def create_app(
         return {"ok": True}
 
     app.include_router(sessions.router)
+    app.include_router(agent.router)
     return app
 
 
