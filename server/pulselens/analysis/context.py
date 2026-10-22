@@ -11,7 +11,7 @@ import numpy as np
 from pulselens.analysis.landmarks import landmarks_for
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
-from pulselens.analysis.vision.frames import REGION_NAMES, region_means
+from pulselens.analysis.vision.frames import REGION_NAMES, dhash, region_means
 from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.bundle import Bundle
 
@@ -33,10 +33,21 @@ class AnalysisContext:
     thresholds: Thresholds
     readable: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))  # (n,) the JPEG decoded
     frame_w: int = 0
+    # Near-duplicate inputs, against the previous readable frame (NaN for the first readable and unreadable frames):
+    hamming_prev: np.ndarray = field(default_factory=lambda: np.zeros(0))  # (n,) dHash bit distance
+    mad_prev: np.ndarray = field(default_factory=lambda: np.zeros(0))  # (n,) mean abs diff, 0..255, [::8] grid
 
     @property
     def n(self) -> int:
         return len(self.t)
+
+
+def read_frame(bundle: Bundle, idx: int) -> np.ndarray | None:
+    """Bundle.read_frame, but None instead of an exception: cv2.imdecode raises on a 0-byte file (issue for Keshav)."""
+    try:
+        return bundle.read_frame(idx)
+    except Exception:  # noqa: BLE001 -- an unreadable frame is a missing frame
+        return None
 
 
 def _num(x: Any) -> float:
@@ -53,15 +64,24 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     yaw = np.full(n, np.nan)
     box = np.full((n, 4), np.nan)
     readable = np.zeros(n, dtype=bool)
+    hamming = np.full(n, np.nan)
+    mad = np.full(n, np.nan)
+    prev: tuple[int, np.ndarray] | None = None
     frame_w = 0
     for i, meta in enumerate(bundle.frames):
-        img = bundle.read_frame(meta.idx)
+        img = read_frame(bundle, meta.idx)
         if img is None:
             continue
         readable[i] = True
         h, w = img.shape[:2]
         frame_w = frame_w or w
-        linear = srgb_to_linear(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        rgb_u8 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        linear = srgb_to_linear(rgb_u8)
+        h_now, small = dhash(rgb_u8), rgb_u8[::8, ::8].astype(np.int16)
+        if prev is not None and prev[1].shape == small.shape:
+            hamming[i] = (h_now ^ prev[0]).bit_count()
+            mad[i] = float(np.abs(small - prev[1]).mean())
+        prev = (h_now, small)
         found = landmarks.get(meta.idx)
         regions = None
         if found and found.get("landmarks"):
@@ -81,4 +101,6 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         thresholds=thresholds,
         readable=readable,
         frame_w=frame_w,
+        hamming_prev=hamming,
+        mad_prev=mad,
     )

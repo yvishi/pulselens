@@ -22,6 +22,15 @@ log = logging.getLogger("pulselens.analysis")
 CHECKS: list[Callable[[AnalysisContext], list[CheckResult]]] = []
 
 
+def _register() -> None:
+    from pulselens.analysis.checks import sensor_stream
+
+    CHECKS.extend([sensor_stream.run])
+
+
+_register()
+
+
 def _no_frames(explanation: str) -> list[CheckResult]:
     return [abstain(s.check_id, s.family, s.vote_group, ["quality.no_frames"], explanation) for s in specs.ALL]
 

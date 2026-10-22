@@ -56,13 +56,14 @@ def landmarks_for(bundle: Bundle, model_path: Path = FACE_MODEL) -> dict[int, di
     if not model_path.exists():
         log.warning("%s is missing (run scripts/fetch_models.py); every face check will abstain", model_path)
         return {f.idx: None for f in bundle.frames}
+    from pulselens.analysis.context import read_frame
     from pulselens.analysis.vision.face import Landmarker
 
     found: dict[int, dict | None] = {}
     landmarker = Landmarker(model_path)
     try:
         for meta in bundle.frames:
-            img = bundle.read_frame(meta.idx)
+            img = read_frame(bundle, meta.idx)
             found[meta.idx] = landmarker.detect(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), meta.t_ms) if img is not None \
                 else None
     finally:

@@ -36,11 +36,15 @@ sensor.cadence:
   flag_at: 0.6
   max_gap_ms: 1000
   min_frames: 30
+  too_regular_share: 0.98    # share of intervals within 0.5 ms of the median ...
+  too_regular_cv: 0.01       # ... and interval spread below this: a perfect clock (hypothesis, measure at S2)
 
 sensor.duplicates:
   flag_at: 1.0
   max_share: 0.05
   min_frames: 30
+  max_hamming: 2             # dHash bits
+  max_mad: 0.5               # mean abs difference, 0..255, on a [::8] pixel grid
 
 sensor.mode_probe:
   flag_at: 0.7

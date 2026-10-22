@@ -58,6 +58,7 @@ def test_analyze_when_every_jpeg_is_corrupt(tmp_path: Path) -> None:
         f.write_bytes(b"")
     results = analyze(path)
     assert results and all(r.status == "abstain" for r in results)
+    assert all(r.explanation.startswith("None of the") for r in results)  # read as unreadable, not as a crash
 
 
 def test_context_measures_the_regions_and_the_yaw(genuine: Path) -> None:
