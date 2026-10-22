@@ -26,12 +26,13 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from pulselens.analysis import specs
+from pulselens.analysis.checks.light_common import colour_events, light_not_run, session_abstain
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.echo import EchoOnset, Response, echo_onset, response
 from pulselens.analysis.reason_text import text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.analysis.vision.linearize import srgb_to_linear
-from pulselens.contracts import ChallengeEvent, CheckResult, ColourStep, Plot
+from pulselens.contracts import CheckResult, Plot
 
 SPEC = specs.LIGHT_RESPONSE
 MAX_PLOT_POINTS = 300
@@ -61,16 +62,6 @@ class StepEcho:
     @property
     def valid(self) -> bool:
         return self.onset.valid and self.clear and not self.window_reasons
-
-
-def colour_events(ctx: AnalysisContext) -> list[tuple[ColourStep, ChallengeEvent]]:
-    """Colour steps the client reports as shown, with a painted time and colour, in step order."""
-    ch = ctx.bundle.challenge
-    if ch is None:
-        return []
-    shown = {e.step_id: e for e in ctx.bundle.events
-             if e.status == "shown" and e.painted_t_ms is not None and e.shown_rgb is not None}
-    return [(s, shown[s.step_id]) for s in ch.steps if isinstance(s, ColourStep) and s.step_id in shown]
 
 
 def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
@@ -112,27 +103,12 @@ def _plot(steps: list[StepEcho], markers: list[tuple[float, str]]) -> Plot:
 
 @guarded(SPEC)
 def run(ctx: AnalysisContext) -> list[CheckResult]:
-    plan = ctx.bundle.plan
-    if plan is not None and not plan.run_light:
-        return []
-    events = colour_events(ctx)
-    if not events:
+    if light_not_run(ctx):
         return []
     ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
-    q = ctx.thresholds.params("quality")
     p = ctx.thresholds.params(SPEC.check_id)
-
-    overall = ctx.quality.overall
-    min_fps = float(q.get("min_fps", 12))
-    if "quality.low_fps" in overall.reasons:
-        return [abstain(*ids, overall.blocking(), f"The camera delivered {overall.fps:.1f} fps, below the "
-                        f"{min_fps:.0f} fps needed to time the light response.", features={"fps": overall.fps},
-                        window_id="all")]
-    if "quality.no_face" in overall.reasons:
-        min_face = float(q.get("min_face_present", 0.8))
-        return [abstain(*ids, overall.blocking(), f"The face was visible in {overall.face_present:.0%} of frames "
-                        f"(need {min_face:.0%}).", quality=overall.face_present,
-                        features={"face_present": overall.face_present}, window_id="all")]
+    if (gate := session_abstain(ctx, SPEC, "time the light response")) is not None:
+        return [gate]
 
     steps = step_echoes(ctx)
     valid = [s for s in steps if s.valid]

@@ -7,7 +7,7 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - [x] G2 — quality gate (`analysis/quality.py`: `WindowQuality`, `QualityReport`, `assess`), filled into `ctx.quality` by `build_context`; `light.response` now leaves out steps whose window is not usable and adds the window reasons to its abstain. 16 quality tests; full suite 127 passed, lint clean. Stacked on G3 (PR #7). 2026-10-23.
 - [x] G3 — `light.response` (`analysis/checks/light_response.py`, C.response) with `analysis/echo.py` ported from V2 (onset, constant-fraction onset, SNR gate; input is now a step's painted/ended/colour). 44 ported echo tests + 21 light tests; full suite 111 passed, lint clean. Stacked on G4 (PR #6). 2026-10-23.
 - [x] G4 — `sensor.cadence` and `sensor.duplicates` (`analysis/checks/sensor_stream.py`, vote group `B.stream`), ported from V2's `camera_timing`/`camera_duplicates`, now in `CHECKS`. 10 tests; full suite 46 passed, lint clean. Stacked on G1 (PR #4). 2026-10-23.
-- [ ] G5
+- [x] G5 — `light.face_neck` (ported from V2's `optical_face_neck`, with the unclear-vs-silent fix) and `light.background` (new), both `C.relative`; shared helpers moved to `checks/light_common.py`. 23 tests; full suite 150 passed, lint clean. Stacked on G2 (PR #8). 2026-10-23.
 - [ ] G6
 - [ ] G7
 - [ ] G8
@@ -16,6 +16,13 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - [ ] G11
 
 ## Decisions
+- **G5: the neck-only rule keeps the old repo's majority condition** (neck-only steps ≥ 2 **and** at least half of the measured steps), on top of the task's "≥ 2", so one or two odd steps cannot flag a genuine person.
+- **G5: the face–neck delay is reported (`median_cf_delta_ms`), not scored,** as the task says. V2 scored it; one webcam frame is longer than any lag limit.
+- **G5: the ratio rule rarely fires.** A pair needs both echoes at ≥ 2× their threshold, so a neck far weaker than the face usually becomes "too close to the noise" (abstain, `light.weak_echoes`) before its ratio can pass ln 4 + ½ ln 2 (5.66×). Synthetic: neck 0.1× at noise 0.003 abstains; neck 0.08× at noise 0.001 flags at 6.2×. Strong necks saturate in chromaticity (10× the screen light gives only a 0.39 ratio), so the high side does not flag either.
+- **G5: a swap can lose a step to "unclear":** a face noise frame peaking over its threshold makes that step not clearly silent (ported rule). The synthetic swap flags on 5 of 6.
+- **G5: light.background projects both regions' mean change onto the shown colour** (`echo.response`) over steps with a clear face echo; risk = 0.5 × ratio / 0.8. Genuine synthetic ratio is 0.07, a full-frame glossy screen (wall echo = face echo) 1.07. A real replay may differ; measure at S2. New code `light.background_hidden` (under 20% of the frame is background).
+- **G5: new code `light.weak_echoes`** for face_neck, because the weak side may be the neck, not the face.
+- **Test speed: the server suite now takes 107 s**, mostly synthetic sessions rendered per test. Worth fixing before S2 (cache sessions that tests don't modify).
 - **G2: `WindowQuality.usable` ignores the neck; `blocking(neck=True)` adds it.** The neck rule only matters for checks that use the neck (face_neck, sensor.regions), as the task says. `quality.neck_hidden` is always in `reasons`.
 - **G2: the motion rule does not apply in a turn window, and the turn's frames are left out of "all"'s motion,** so asking the person to turn never makes the whole session "moving".
 - **G2: luma is the sRGB luma (0..255) of the skin region's mean linear colour; `luma_ok` is over face frames only** (no face is `quality.no_face`, not dark). too_dark vs too_bright comes from the median luma. Two new provisional keys: `min_luma_ok` 0.8 and `max_saturated` 0.2.
@@ -38,6 +45,7 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - **G1: `result(..., voting=False)` keeps `flag` false**, for `voting: false` checks in `thresholds.yaml` (prnu, pulse; S3 decisions).
 
 ## Measurements
+- **G5 synthetic matrix** (cadence / duplicates / response / face_neck / background): genuine ok×5; replay ok ok FLAG abst abst; swap ok ok FLAG FLAG abst; virtual camera FLAG FLAG FLAG abst abst; swapped colours ok ok FLAG abst abst; glossy screen ok ok ok ok FLAG; neck 0.3× and 3× ok×5; noise 0.06 ok ok abst abst abst.
 - **G3 (synthetic, 6 steps):** genuine median delay 88 ms at 30 fps and 81 ms at 15 fps (true 100 ms after painted; the onset is the 4-sigma crossing), SNR 18–22 at noise 0.003. The 60/100/150/250 ms delays are recovered within one frame. A whole `analyze()` on a 403-frame session takes 1.3 s.
 - **G1:** `build_context` 3.4 ms per frame at 320x240 with cached landmarks (404 frames in 1.38 s) on Keshav's laptop. The landmark pass at 640x480 is not measured yet (G11).
 

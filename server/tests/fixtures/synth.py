@@ -159,11 +159,17 @@ def make_session(
     chin_y: float = 150.0,
     face_in_frames: bool = True,
     swap_colours: bool = False,
+    neck_gain: float = 1.0,
+    face_noise_gain: float = 1.0,
+    background_echo: float = 0.05,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
     `swap_colours`: the face and neck answer with the colour of the step half a sequence away (a recording of another
-    session's challenge), while events.jsonl records what this session painted."""
+    session's challenge), while events.jsonl records what this session painted.
+    `neck_gain`: how strongly the neck (or shirt) answers the screen relative to the face, as a darker or shinier
+    shirt does. `face_noise_gain`: extra per-frame illumination jitter on the face only. `background_echo`: the
+    wall's share of the screen light (a glossy replay screen filling the frame answers evenly, near 1)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -179,12 +185,12 @@ def make_session(
         t = t - t[0]
 
     face_k = K if kind == "genuine" else 0.0
-    neck_k = K if kind in ("genuine", "swap_no_face_echo") else 0.0
+    neck_k = K * neck_gain if kind in ("genuine", "swap_no_face_echo") else 0.0
     lit = [e.shown_rgb for e in events if e.shown_rgb is not None]
     lit = [lit[(k + len(lit) // 2) % len(lit)] for k in range(len(lit))] if swap_colours and lit else None
     face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
     neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
-    wall = _light(t, interval, events, delay_ms, 0.05 * K) * WALL
+    wall = _light(t, interval, events, delay_ms, background_echo * K) * WALL
     yaw = _yaw(t, events, ch, turn_followed) + (0 if perfect else rng.normal(0, 0.5, len(t)))
 
     fx0, fy0, fx1, fy1 = 120, int(chin_y - 110), 200, int(chin_y)
@@ -195,7 +201,7 @@ def make_session(
         img[:] = wall[i] + rng.normal(0, noise / 5, 3) if noise else wall[i]
         if face_in_frames:
             img[fy1:H, 130:190] = neck[i] + (rng.normal(0, noise / 5, 3) if noise else 0)
-            img[fy0:fy1, fx0:fx1] = face[i] + (rng.normal(0, noise / 5, 3) if noise else 0)
+            img[fy0:fy1, fx0:fx1] = face[i] + (rng.normal(0, face_noise_gain * noise / 5, 3) if noise else 0)
         if noise:
             img += rng.standard_normal(img.shape, dtype=np.float32) * np.float32(noise)
         srgb = _ENCODE[np.clip(img * (_ENCODE_STEPS - 1) + 0.5, 0, _ENCODE_STEPS - 1).astype(np.int32)]
