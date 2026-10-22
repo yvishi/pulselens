@@ -4,7 +4,7 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 
 ## Tasks
 - [x] G1 — package skeleton, vision base, `analyze()`, synthetic bundles, CLI. Vision base ported from PulseLensV2 (byte-identical to PulseLensFinal for these files); `synth.py` rewritten for the new bundle (Challenge + ChallengeEvent, `write_bundle`, 478-point `landmarks.jsonl`). 30 analysis tests; full suite 37 passed, 0 skipped (Keshav's 2 OpenCV bundle tests now run), lint clean. `CHECKS` is still empty: real analysis returns no results until G3/G4. 2026-10-23.
-- [ ] G2
+- [x] G2 — quality gate (`analysis/quality.py`: `WindowQuality`, `QualityReport`, `assess`), filled into `ctx.quality` by `build_context`; `light.response` now leaves out steps whose window is not usable and adds the window reasons to its abstain. 16 quality tests; full suite 127 passed, lint clean. Stacked on G3 (PR #7). 2026-10-23.
 - [x] G3 — `light.response` (`analysis/checks/light_response.py`, C.response) with `analysis/echo.py` ported from V2 (onset, constant-fraction onset, SNR gate; input is now a step's painted/ended/colour). 44 ported echo tests + 21 light tests; full suite 111 passed, lint clean. Stacked on G4 (PR #6). 2026-10-23.
 - [x] G4 — `sensor.cadence` and `sensor.duplicates` (`analysis/checks/sensor_stream.py`, vote group `B.stream`), ported from V2's `camera_timing`/`camera_duplicates`, now in `CHECKS`. 10 tests; full suite 46 passed, lint clean. Stacked on G1 (PR #4). 2026-10-23.
 - [ ] G5
@@ -16,6 +16,12 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - [ ] G11
 
 ## Decisions
+- **G2: `WindowQuality.usable` ignores the neck; `blocking(neck=True)` adds it.** The neck rule only matters for checks that use the neck (face_neck, sensor.regions), as the task says. `quality.neck_hidden` is always in `reasons`.
+- **G2: the motion rule does not apply in a turn window, and the turn's frames are left out of "all"'s motion,** so asking the person to turn never makes the whole session "moving".
+- **G2: luma is the sRGB luma (0..255) of the skin region's mean linear colour; `luma_ok` is over face frames only** (no face is `quality.no_face`, not dark). too_dark vs too_bright comes from the median luma. Two new provisional keys: `min_luma_ok` 0.8 and `max_saturated` 0.2.
+- **G2: `assess(..., thresholds=)` takes the thresholds as a keyword** (the task's signature has no way to reach `quality:` otherwise); without it the file is loaded. `frame_w` is accepted but unused: motion is in face widths.
+- **G2 → light.response: a step whose window is not usable is left out** (it counts as neither answered nor silent). Its reasons join the abstain when fewer than 4 steps remain, e.g. "6 had poor capture (the face was too dark to measure)". The fps and no-face abstains now come from the "all" window.
+- **Test speed:** the server suite takes about 60 s now, because every light test renders its own synthetic session. Share the sessions with module-scoped fixtures at G11 if it gets in the way.
 - **G3: "unclear vs silent" applies to light.response too, not only face_neck.** A step with no echo counts as silent only when its 4-sigma threshold is at most half the session's median answered echo, and at most `max_silent_threshold` (0.012, provisional). Otherwise it is unclear and left out. Without this, a synthetic genuine session at noise 0.06 was **flagged** (3 of 6 answered). Now it abstains with `light.too_few_steps` + `light.weak_face_echo`. **Trade-off:** a replay at synthetic noise 0.02 also abstains instead of flagging. `max_silent_threshold` is the number to set from real bright-room webcam sessions at S2 (REFERENCE: bright-room echo SNR ~5).
 - **G3: `order_ok` is measured separately from the onset** (`echo.response`: mean chromaticity change over [painted + 200, ended + 100] ms, cosine with the shown colour ≥ 0.5) and only for steps that responded. A step that changes colour the wrong way is `light.wrong_order`, not `light.no_echo`. The synthetic `swap_colours=True` (each step echoes the colour half a sequence away) flags with `light.wrong_order`.
 - **G3: `median_snr` is in threshold units** (hold amplitude / max(4 sigma, a_min)), so 1 is just detectable.

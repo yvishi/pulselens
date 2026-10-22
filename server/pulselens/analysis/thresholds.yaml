@@ -7,9 +7,11 @@ quality:
   min_fps: 12
   min_face_present: 0.8
   luma: [40, 220]            # face mean luma, sRGB 0..255
+  min_luma_ok: 0.8           # share of face frames inside the luma range
   min_neck_coverage: 0.5
   max_motion: 0.5            # face widths per second (not for the turn window)
   saturation: 0.95           # linear channel mean above which a region counts as clipped
+  max_saturated: 0.2         # share of face frames with the face or neck clipped
 
 echo:
   a_min: 0.003               # smallest projection on the colour direction (chromaticity units) that counts as an echo
