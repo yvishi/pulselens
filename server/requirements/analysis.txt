@@ -1,1 +1,5 @@
 # owned by Ganeev
+# mediapipe brings opencv-contrib-python (cv2). Do not add opencv-python-headless: it would overwrite the same cv2.
+mediapipe>=0.10,<0.11
+scipy
+matplotlib

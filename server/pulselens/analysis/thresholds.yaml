@@ -1,0 +1,73 @@
+# PROVISIONAL values, used only until G9 calibrates them on set A genuine sessions (thresholds.calibrated.yaml).
+# They are physics-based guesses and the old repo's bootstrap values, not measurements: every result that uses them
+# carries threshold_source "provisional", and the console shows PROVISIONAL THRESHOLDS.
+# `voting: false` on a check makes its `flag` always false (measured, not voting; set at S3).
+
+quality:
+  min_fps: 12
+  min_face_present: 0.8
+  luma: [40, 220]            # face mean luma, sRGB 0..255
+  min_neck_coverage: 0.5
+  max_motion: 0.5            # face widths per second (not for the turn window)
+  saturation: 0.95           # linear channel mean above which a region counts as clipped
+
+echo:
+  a_min: 0.003               # smallest projection on the colour direction (chromaticity units) that counts as an echo
+  delay_band_ms: [0, 300]
+
+light.response:
+  flag_at: 0.5               # fewer than half the steps answered
+  min_steps: 4
+  min_cosine: 0.5            # measured vs expected colour direction
+
+light.face_neck:
+  flag_at: 0.5
+  min_pairs: 3
+  min_snr: 2.0
+  ratio_log_tolerance: 1.386 # ln 4: skin and shirt reflect differently, so up to 4x either way scores nothing
+  ratio_log_scale: 0.693     # ln 2 per score unit beyond that
+  neck_only_steps: 2
+
+light.background:
+  flag_at: 0.5
+  max_bg_ratio: 0.8
+
+sensor.cadence:
+  flag_at: 0.6
+  max_gap_ms: 1000
+  min_frames: 30
+
+sensor.duplicates:
+  flag_at: 1.0
+  max_share: 0.05
+  min_frames: 30
+
+sensor.mode_probe:
+  flag_at: 0.7
+  max_switch_ms: 150
+
+sensor.regions:
+  flag_at: 0.5
+  ratio_log_tolerance: 0.916 # ln 2.5
+
+sensor.prnu:
+  flag_at: 1.0
+  min_pce: 50
+  voting: false              # supporting only
+
+turn.follow:
+  flag_at: 0.5
+  min_peak_deg: 15
+  max_return_deg: 10
+  still_deg: 10
+
+turn.identity:
+  flag_at: 0.5
+  max_change: 0.15
+
+visual.sbi:
+  flag_at: 0.5
+
+pulse.coherence:
+  flag_at: 1.0
+  voting: false              # logged only
