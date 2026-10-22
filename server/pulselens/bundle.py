@@ -71,6 +71,9 @@ class Bundle:
     events: list[ChallengeEvent]
     label: Label | None
     skipped_lines: int = field(default=0)  # unreadable lines in frames.jsonl and events.jsonl
+    # every readable frames.jsonl line as written, repeats included, with the engine's batch_seq and
+    # received_at_ms: integrity (K5) needs the repeats and the batch numbers that `frames` drops
+    frame_rows: list[dict] = field(default_factory=list)
 
     def frame_path(self, idx: int) -> Path:
         return self.path / "frames" / frame_name(idx)
@@ -118,6 +121,7 @@ def load_bundle(path: Path) -> Bundle:
         events=events,
         label=_model(Label, session.get("label")),
         skipped_lines=skipped,
+        frame_rows=frame_rows,
     )
 
 

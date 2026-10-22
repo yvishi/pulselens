@@ -16,6 +16,15 @@ REASON_TEXT: dict[str, str] = {
     "mode.constrained.dim": "The picture is dim, so a simpler, longer challenge runs.",
     "mode.constrained.small_face": "The face is small in the picture, so a simpler, longer challenge runs.",
     "mode.face_not_found": "No face was found before the challenge; the agent should check who is on the call.",
+    # integrity.* (K5): the capture protocol and the upload.
+    "integrity.non_monotonic_time": "Frame times did not increase with the frame number.",
+    "integrity.duplicate_index": "The same frame number was uploaded more than once.",
+    "integrity.unknown_step": "An event named a challenge step that was never issued.",
+    "integrity.event_order": "The challenge steps were shown out of the order they were issued in.",
+    "integrity.after_complete": "Frames or events were sent after the session was completed.",
+    "integrity.no_challenge": "Frames arrived although no challenge was ever issued.",
+    "integrity.too_few_frames": "Too few frames arrived to judge the upload.",
+    "integrity.batch_gaps": "Too many upload batches went missing to rely on the recording.",
     # fusion.* (K6): the outcome sentence, first in Decision.reasons.
     "fusion.integrity_violation": "The session broke the capture protocol, so a person must review it.",
     "fusion.two_families": "Two independent kinds of evidence raised risk, so a person must review it.",
