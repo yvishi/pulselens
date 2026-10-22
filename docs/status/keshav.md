@@ -4,7 +4,7 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 
 ## Tasks
 - [x] K1 — scaffold and contract: `contracts.py` verbatim from CONTRACT §3, `contracts.ts` mirror, `bundle.py`, `config.py`, health route, `scripts/dev.py` (8 targets), web scaffold with the 5 final routes and Yash placeholders, typed `api/client.ts`. pytest 5 passed + 2 skipped (7 of 7 with OpenCV installed), vitest 5 passed, lint clean, Brave e2e 1 passed. 2026-10-22.
-- [ ] K2
+- [x] K2 — sessions API and storage: rows 2–8 of CONTRACT §2 in `api/sessions.py`, `engine/store.py` (`SessionStore`, re-entrant lock per session), `engine/auth.py` (HMAC customer token, in-memory secret, constant-time compare), `fusion.customer_message`. 17 tests incl. single-use challenge under 8 concurrent requests, 413 limits (31 frames, 201 KB, the 901st frame), expiry 410, path tricks 404, and no risk/flag/check_id/family/outcome in any customer response. 2026-10-23.
 - [x] K3 — planner and challenge: `engine/planner.py` (`plan_session` rules 1–5 + face-not-found, `make_challenge`, `rng_for_nonce`), `engine/reason_text.py` (mode.* catalogue). 14 tests: one per rule, first-match order, every emitted code has text (grid of 960 preflights), challenge safety over 200 seeds per mode (no red, no overlap, ≤ 3 colour changes per second, step ids, total_ms), per-nonce randomness. 2026-10-23.
 - [ ] K4
 - [ ] K5
@@ -16,6 +16,9 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [ ] K11
 
 ## Decisions
+- **K2: one re-entrant lock per session for every read and write.** On Windows an atomic replace of `session.json` fails with "Access is denied" while another thread has the file open; the concurrency test hit it until reads took the lock too.
+- **K2: `session.json` gets `after_complete_attempts`** (frames or events posted after `/complete`, refused with 409), so K5 can raise `integrity.after_complete`. Additive key.
+- **K2: `customer_message` lives in `engine/fusion.py` now** (the K6 interface); `fuse()` joins it in K6. `/complete` hands the session to `app.state.run_analysis` (K4's `engine.runner.run_analysis` once it exists; injectable in tests). Audit events (K8) are not written yet.
 - **K3: the 960-preflight grid** in `test_every_reason_has_text` runs `plan_session` over every combination of no-flash, fps, brightness, face size and face found, so a new branch that emits an uncatalogued code fails.
 - **K1: e2e runs in the installed Brave, headed; no browser download.** `setup` does not run `npx playwright install chromium` (team decision for this laptop). `web/playwright.config.ts` has a `brave` project (BRAVE_PATH overrides the path) and an opt-in `chromium` project. e2e never reuses running dev servers: they write to `data/sessions`.
 - **K1: the JPEG bundle tests skip without OpenCV.** `Bundle.read_frame` needs cv2, which arrives with `server/requirements/analysis.txt` (Ganeev). With it installed all 7 server tests pass.
