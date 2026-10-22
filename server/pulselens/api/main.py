@@ -1,7 +1,8 @@
-"""FastAPI app: health, the customer session API (K2); agent routes arrive with K7."""
+"""FastAPI app: health, the customer session API (K2) and the analysis runner (K4); agent routes arrive with K7."""
 
 from __future__ import annotations
 
+import functools
 from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -12,24 +13,22 @@ from fastapi import FastAPI
 
 from pulselens.api import sessions
 from pulselens.config import Settings, get_settings, load_config
+from pulselens.engine.runner import run_analysis
 from pulselens.engine.store import Clock, SessionStore, _wall_ms
 
 # run_analysis(session_dir, store): runs after /complete on a worker thread and writes the decision (K4).
 Runner = Callable[[Path, SessionStore], Any]
 
 
-def _default_runner() -> Runner | None:
-    try:
-        from pulselens.engine.runner import run_analysis  # K4
-    except ImportError:
-        return None
-    return run_analysis
+def _default_runner(settings: Settings, config: dict[str, Any]) -> Runner:
+    """K4's runner: Ganeev's analyze(), or the fake one when PULSE_FAKE_ANALYSIS=1 (or no analyze exists)."""
+    return functools.partial(run_analysis, fake=settings.fake_analysis, timeout_s=config["analysis"]["timeout_s"])
 
 
 def create_app(
     settings: Settings | None = None,
     *,
-    run_analysis: Runner | None = None,
+    runner: Runner | None = None,
     clock: Clock = _wall_ms,
     config: dict[str, Any] | None = None,
 ) -> FastAPI:
@@ -47,7 +46,7 @@ def create_app(
     app.state.config = config
     app.state.store = SessionStore(settings.data_dir, ttl_min=config["session"]["ttl_min"], clock=clock)
     app.state.executor = executor
-    app.state.run_analysis = run_analysis or _default_runner()
+    app.state.run_analysis = runner or _default_runner(settings, config)
 
     @app.get("/api/health")
     def health() -> dict[str, bool]:

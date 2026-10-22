@@ -45,7 +45,7 @@ def clock() -> Clock:
 @pytest.fixture
 def client(tmp_path: Path, clock: Clock) -> TestClient:
     settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
-    with TestClient(create_app(settings, run_analysis=fake_runner, clock=clock)) as c:
+    with TestClient(create_app(settings, runner=fake_runner, clock=clock)) as c:
         yield c
 
 
