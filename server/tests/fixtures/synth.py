@@ -117,16 +117,17 @@ def challenge_events(ch: Challenge) -> list[ChallengeEvent]:
     return out
 
 
-def _light(t: np.ndarray, exposure: float, events: list[ChallengeEvent], delay: float, k: float) -> np.ndarray:
-    """(n, 3) exposure-averaged screen + ambient light reaching a region."""
+def _light(t: np.ndarray, exposure: float, events: list[ChallengeEvent], delay: float, k: float,
+           colours: list[tuple[float, float, float]] | None = None) -> np.ndarray:
+    """(n, 3) exposure-averaged screen + ambient light reaching a region. `colours` (sRGB, one per colour event)
+    overrides what each step lit the region with; default: the colour the event says was shown."""
     neutral = srgb_to_linear(np.array(NEUTRAL_SRGB))
     light = np.tile(AMBIENT + k * neutral, (len(t), 1))
-    for e in events:
-        if e.shown_rgb is None:
-            continue
+    shown = [e for e in events if e.shown_rgb is not None]
+    for e, rgb in zip(shown, colours or [e.shown_rgb for e in shown], strict=True):
         a, b = e.painted_t_ms + delay, e.ended_t_ms + delay
         overlap = np.clip(np.minimum(t, b) - np.maximum(t - exposure, a), 0, None) / exposure
-        light += overlap[:, None] * k * (srgb_to_linear(np.array(e.shown_rgb)) - neutral)
+        light += overlap[:, None] * k * (srgb_to_linear(np.array(rgb)) - neutral)
     return light
 
 
@@ -157,8 +158,12 @@ def make_session(
     delay_ms: float = 100.0,
     chin_y: float = 150.0,
     face_in_frames: bool = True,
+    swap_colours: bool = False,
 ) -> Path:
-    """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path."""
+    """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
+
+    `swap_colours`: the face and neck answer with the colour of the step half a sequence away (a recording of another
+    session's challenge), while events.jsonl records what this session painted."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -175,8 +180,10 @@ def make_session(
 
     face_k = K if kind == "genuine" else 0.0
     neck_k = K if kind in ("genuine", "swap_no_face_echo") else 0.0
-    face = _light(t, interval, events, delay_ms, face_k) * SKIN
-    neck = _light(t, interval, events, delay_ms, neck_k) * SHIRT
+    lit = [e.shown_rgb for e in events if e.shown_rgb is not None]
+    lit = [lit[(k + len(lit) // 2) % len(lit)] for k in range(len(lit))] if swap_colours and lit else None
+    face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
+    neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
     wall = _light(t, interval, events, delay_ms, 0.05 * K) * WALL
     yaw = _yaw(t, events, ch, turn_followed) + (0 if perfect else rng.normal(0, 0.5, len(t)))
 

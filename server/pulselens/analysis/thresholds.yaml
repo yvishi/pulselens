@@ -19,6 +19,8 @@ light.response:
   flag_at: 0.5               # fewer than half the steps answered
   min_steps: 4
   min_cosine: 0.5            # measured vs expected colour direction
+  max_silent_threshold: 0.012  # 4x echo.a_min: a step with no echo whose 4-sigma threshold is above this cannot
+                               # be called silent (unclear). A guess: check against real bright-room webcams at S2
 
 light.face_neck:
   flag_at: 0.5

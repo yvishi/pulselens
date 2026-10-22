@@ -5,7 +5,7 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 ## Tasks
 - [x] G1 — package skeleton, vision base, `analyze()`, synthetic bundles, CLI. Vision base ported from PulseLensV2 (byte-identical to PulseLensFinal for these files); `synth.py` rewritten for the new bundle (Challenge + ChallengeEvent, `write_bundle`, 478-point `landmarks.jsonl`). 30 analysis tests; full suite 37 passed, 0 skipped (Keshav's 2 OpenCV bundle tests now run), lint clean. `CHECKS` is still empty: real analysis returns no results until G3/G4. 2026-10-23.
 - [ ] G2
-- [ ] G3
+- [x] G3 — `light.response` (`analysis/checks/light_response.py`, C.response) with `analysis/echo.py` ported from V2 (onset, constant-fraction onset, SNR gate; input is now a step's painted/ended/colour). 44 ported echo tests + 21 light tests; full suite 111 passed, lint clean. Stacked on G4 (PR #6). 2026-10-23.
 - [x] G4 — `sensor.cadence` and `sensor.duplicates` (`analysis/checks/sensor_stream.py`, vote group `B.stream`), ported from V2's `camera_timing`/`camera_duplicates`, now in `CHECKS`. 10 tests; full suite 46 passed, lint clean. Stacked on G1 (PR #4). 2026-10-23.
 - [ ] G5
 - [ ] G6
@@ -16,6 +16,11 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - [ ] G11
 
 ## Decisions
+- **G3: "unclear vs silent" applies to light.response too, not only face_neck.** A step with no echo counts as silent only when its 4-sigma threshold is at most half the session's median answered echo, and at most `max_silent_threshold` (0.012, provisional). Otherwise it is unclear and left out. Without this, a synthetic genuine session at noise 0.06 was **flagged** (3 of 6 answered). Now it abstains with `light.too_few_steps` + `light.weak_face_echo`. **Trade-off:** a replay at synthetic noise 0.02 also abstains instead of flagging. `max_silent_threshold` is the number to set from real bright-room webcam sessions at S2 (REFERENCE: bright-room echo SNR ~5).
+- **G3: `order_ok` is measured separately from the onset** (`echo.response`: mean chromaticity change over [painted + 200, ended + 100] ms, cosine with the shown colour ≥ 0.5) and only for steps that responded. A step that changes colour the wrong way is `light.wrong_order`, not `light.no_echo`. The synthetic `swap_colours=True` (each step echoes the colour half a sequence away) flags with `light.wrong_order`.
+- **G3: `median_snr` is in threshold units** (hold amplitude / max(4 sigma, a_min)), so 1 is just detectable.
+- **G3: fps below 12 and face present < 80% abstain before any step is measured** (`quality.low_fps`, `quality.no_face`). G2's window quality reasons are added once G2 exists.
+- **G3: an echo outside the 0–300 ms band counts as a failed step** (the face did change, just not on time).
 - **G4: dHash distance and frame difference are measured in `build_context`** (`hamming_prev`, `mad_prev`, against the previous *readable* frame), so frames are decoded once. A corrupt frame is never counted as a duplicate.
 - **G4: `sensor.too_regular` flags (risk 0.7 vs flag_at 0.6), as the task says, but it is a hypothesis.** The old repo only measured evenness because hardware-timestamped webcams are very even too. At S2, check `exact_share` and `cv` on real webcams and phones before trusting it.
 - **G4: duplicates may need a guard for phones with heavy temporal denoising.** A noise-free still source gives near-identical frames (the synthetic virtual camera: 96% repeats). Check the duplicate share of genuine phone sessions in a still, dim room at S2/G11.
@@ -27,6 +32,7 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - **G1: `result(..., voting=False)` keeps `flag` false**, for `voting: false` checks in `thresholds.yaml` (prnu, pulse; S3 decisions).
 
 ## Measurements
+- **G3 (synthetic, 6 steps):** genuine median delay 88 ms at 30 fps and 81 ms at 15 fps (true 100 ms after painted; the onset is the 4-sigma crossing), SNR 18–22 at noise 0.003. The 60/100/150/250 ms delays are recovered within one frame. A whole `analyze()` on a 403-frame session takes 1.3 s.
 - **G1:** `build_context` 3.4 ms per frame at 320x240 with cached landmarks (404 frames in 1.38 s) on Keshav's laptop. The landmark pass at 640x480 is not measured yet (G11).
 
 ## Blocked
