@@ -1,0 +1,14 @@
+data/
+models/
+.env
+.venv*/
+node_modules/
+web/public/models/
+eval/out/
+eval/FROZEN
+test-results/
+playwright-report/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
