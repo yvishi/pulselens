@@ -23,9 +23,9 @@ CHECKS: list[Callable[[AnalysisContext], list[CheckResult]]] = []
 
 
 def _register() -> None:
-    from pulselens.analysis.checks import light_background, light_face_neck, light_response, sensor_stream
+    from pulselens.analysis.checks import light_background, light_face_neck, light_response, sensor_stream, turn_follow
 
-    CHECKS.extend([sensor_stream.run, light_response.run, light_face_neck.run, light_background.run])
+    CHECKS.extend([sensor_stream.run, light_response.run, light_face_neck.run, light_background.run, turn_follow.run])
 
 
 _register()
