@@ -8,7 +8,7 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [x] K3 — planner and challenge: `engine/planner.py` (`plan_session` rules 1–5 + face-not-found, `make_challenge`, `rng_for_nonce`), `engine/reason_text.py` (mode.* catalogue). 14 tests: one per rule, first-match order, every emitted code has text (grid of 960 preflights), challenge safety over 200 seeds per mode (no red, no overlap, ≤ 3 colour changes per second, step ids, total_ms), per-nonce randomness. 2026-10-23.
 - [ ] K4
 - [ ] K5
-- [ ] K6
+- [x] K6 — fusion and outcomes: `engine/fusion.py::fuse` (CONTRACT §8 exactly: usable-only gate, one vote per vote_group, family states, A reported but never votes, first-match outcome rules, provisional), outcome and step-up sentences in `reason_text.py`. 29 tests: the 13-row outcome table, correlated cues one vote, A never votes, family states, reasons order, provisional, customer message mapping. 2026-10-23.
 - [ ] K7
 - [ ] K8
 - [ ] K9
@@ -16,6 +16,8 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [ ] K11
 
 ## Decisions
+- **K6: `Decision.reasons`** = the outcome sentence, then the step-up suggestion when there is one, then (for an integrity violation) the protocol errors' explanations, then one sentence per flagged family ("Sensor and stream: …", family A marked "reported only, not used in the decision"), then one per abstained family. Every number in them comes from a check's own explanation.
+- **K6: "C abstained with a `quality.*` light reason"** reads as: family C's state is `abstained` and at least one C result carries a `quality.*` reason code. `attempt >= 3` wins over every other low-coverage step-up.
 - **K2: one re-entrant lock per session for every read and write.** On Windows an atomic replace of `session.json` fails with "Access is denied" while another thread has the file open; the concurrency test hit it until reads took the lock too.
 - **K2: `session.json` gets `after_complete_attempts`** (frames or events posted after `/complete`, refused with 409), so K5 can raise `integrity.after_complete`. Additive key.
 - **K2: `customer_message` lives in `engine/fusion.py` now** (the K6 interface); `fuse()` joins it in K6. `/complete` hands the session to `app.state.run_analysis` (K4's `engine.runner.run_analysis` once it exists; injectable in tests). Audit events (K8) are not written yet.
