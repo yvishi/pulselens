@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor
 from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 
@@ -19,36 +19,33 @@ from pulselens.contracts import CheckResult, Decision
 from pulselens.engine import fake_analysis
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
+from pulselens.engine.results import abstain
 from pulselens.engine.store import SessionStore
 
 log = logging.getLogger("pulselens.runner")
 Analyze = Callable[[Path], list[CheckResult]]
 
-# A timed-out analysis keeps its thread (Python cannot kill one); a separate pool keeps it from blocking new runs.
-_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analyze")
 
-
-def choose_analyze(fake: bool) -> tuple[Analyze, bool]:
-    """(analyze, is_fake): the fake when asked for, or while pulselens.analysis has no analyze."""
+def choose_analyze(fake: bool) -> Analyze:
+    """The fake when asked for, or while pulselens.analysis has no analyze; otherwise Ganeev's."""
     if not fake:
         try:
             from pulselens.analysis import analyze  # Ganeev
         except ImportError:
             analyze = None
         if callable(analyze):
-            return analyze, False
-    return fake_analysis.analyze, True
+            return analyze
+    return fake_analysis.analyze
 
 
 def analysis_error(explanation: str) -> CheckResult:
-    return CheckResult(
-        check_id="analysis.error", family="B", vote_group="B.analysis", status="abstain", risk=None, flag=False,
-        quality=0.0, explanation=explanation, reason_codes=["analysis.error"], threshold_source="rule",
-    )
+    return abstain("analysis.error", explanation, ["analysis.error"], vote_group="B.analysis")
 
 
-def _analyze_with_timeout(analyze: Analyze, session_dir: Path, timeout_s: float) -> list[CheckResult]:
-    future = _pool.submit(analyze, session_dir)
+def _analyze_with_timeout(analyze: Analyze, session_dir: Path, timeout_s: float, pool: Executor) -> list[CheckResult]:
+    # A timed-out analysis keeps its thread (Python cannot kill one), so it runs on its own pool: the app's
+    # analysis workers stay free for the next session.
+    future = pool.submit(analyze, session_dir)
     try:
         results = future.result(timeout=timeout_s)
     except FutureTimeout:
@@ -62,8 +59,8 @@ def _analyze_with_timeout(analyze: Analyze, session_dir: Path, timeout_s: float)
     return results
 
 
-def run_analysis(session_dir: Path, store: SessionStore, *, fake: bool = False, timeout_s: float = 120,
-                 analyze: Analyze | None = None) -> Decision:
+def run_analysis(session_dir: Path, store: SessionStore, *, pool: Executor, fake: bool = False,
+                 timeout_s: float = 120, analyze: Analyze | None = None) -> Decision:
     session_dir = Path(session_dir)
     session_id = session_dir.name
     bundle = load_bundle(session_dir)
@@ -72,9 +69,7 @@ def run_analysis(session_dir: Path, store: SessionStore, *, fake: bool = False, 
     except Exception:
         log.exception("integrity check of %s raised", session_id)
         integrity = [analysis_error("The integrity check did not finish.")]
-    if analyze is None:
-        analyze, _ = choose_analyze(fake)
-    results = integrity + _analyze_with_timeout(analyze, session_dir, timeout_s)
+    results = integrity + _analyze_with_timeout(analyze or choose_analyze(fake), session_dir, timeout_s, pool)
     decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)))
     with store.lock(session_id):
         (session_dir / "results.json").write_text(

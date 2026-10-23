@@ -26,11 +26,10 @@ from pulselens.contracts import (
 from pulselens.engine.auth import bearer
 from pulselens.engine.fusion import customer_message
 from pulselens.engine.planner import make_challenge, plan_session, rng_for_nonce
-from pulselens.engine.store import SessionStore
+from pulselens.engine.store import FINISHED, SessionStore
 
 router = APIRouter(prefix="/api")
 EVENTS = TypeAdapter(list[ChallengeEvent])
-FINISHED = ("analysing", "done")
 Auth = Annotated[str | None, Header(alias="Authorization")]
 
 
@@ -46,15 +45,15 @@ def _customer(request: Request, session_id: str, authorization: str | None) -> d
         raise HTTPException(404, "unknown_session") from None
     if not store.signer.check(session_id, bearer(authorization)):
         raise HTTPException(401, "unauthorized")
-    if session["state"] not in FINISHED and store.expired(session):
+    if store.effective_state(session) == "expired":
         if session["state"] != "expired":
             store.set_state(session_id, "expired")
         raise HTTPException(410, "session_expired")
     return session
 
 
-def _not_finished(request: Request, session: dict[str, Any]) -> None:
-    """Frames and events after /complete are refused, and counted for integrity (K5: integrity.after_complete)."""
+def _refuse_after_complete(request: Request, session: dict[str, Any]) -> None:
+    """Refuses frames and events after /complete, and counts the attempt (K5: integrity.after_complete)."""
     if session["state"] in FINISHED:
         _store(request).increment(session["session_id"], "after_complete_attempts")
         raise HTTPException(409, "session_complete")
@@ -72,7 +71,7 @@ def create_session(request: Request, body: SessionCreate) -> SessionCreated:
 def preflight(request: Request, session_id: str, body: Preflight, authorization: Auth = None) -> Plan:
     session = _customer(request, session_id, authorization)
     store = _store(request)
-    if store.load_json(session_id, "challenge.json") is not None:
+    if store.has(session_id, "challenge"):
         raise HTTPException(409, "challenge_already_issued")
     plan = plan_session(body, bool(session["no_flash"]), request.app.state.config)
     store.save_model(session_id, "preflight", body)
@@ -85,16 +84,14 @@ def preflight(request: Request, session_id: str, body: Preflight, authorization:
 def challenge(request: Request, session_id: str, authorization: Auth = None) -> Challenge:
     session = _customer(request, session_id, authorization)
     store = _store(request)
-    with store.lock(session_id):  # single use, even under concurrent requests
-        if (store.path(session_id) / "challenge.json").exists():
-            raise HTTPException(409, "challenge_already_issued")
-        raw_plan = store.load_json(session_id, "plan.json")
-        if raw_plan is None:
-            raise HTTPException(409, "no_plan")
-        nonce = session["nonce"]
-        issued = make_challenge(Plan.model_validate(raw_plan), session_id, nonce, rng_for_nonce(nonce),
-                                request.app.state.config)
-        (store.path(session_id) / "challenge.json").write_text(issued.model_dump_json(), encoding="utf-8")
+    raw_plan = store.load(session_id, "plan")
+    if raw_plan is None:
+        raise HTTPException(409, "no_plan")
+    nonce = session["nonce"]
+    issued = make_challenge(Plan.model_validate(raw_plan), session_id, nonce, rng_for_nonce(nonce),
+                            request.app.state.config)
+    if not store.save_once(session_id, "challenge", issued):  # single use, even under concurrent requests
+        raise HTTPException(409, "challenge_already_issued")
     store.set_state(session_id, "capturing")
     return issued
 
@@ -102,7 +99,7 @@ def challenge(request: Request, session_id: str, authorization: Auth = None) -> 
 @router.post("/sessions/{session_id}/frames", status_code=204)
 async def frames(request: Request, session_id: str, authorization: Auth = None) -> Response:
     session = _customer(request, session_id, authorization)
-    _not_finished(request, session)
+    _refuse_after_complete(request, session)
     limits = request.app.state.config["session"]
     store = _store(request)
     async with request.form(max_files=1000, max_fields=10) as form:
@@ -130,7 +127,7 @@ async def frames(request: Request, session_id: str, authorization: Auth = None) 
 @router.post("/sessions/{session_id}/events", status_code=204)
 async def events(request: Request, session_id: str, authorization: Auth = None) -> Response:
     session = _customer(request, session_id, authorization)
-    _not_finished(request, session)
+    _refuse_after_complete(request, session)
     try:
         parsed = EVENTS.validate_json(await request.body())
     except ValidationError:
@@ -146,7 +143,7 @@ def complete(request: Request, session_id: str, authorization: Auth = None) -> R
         raise HTTPException(409, "already_complete")
     store = _store(request)
     store.set_state(session_id, "analysing")
-    runner = request.app.state.run_analysis
+    runner = request.app.state.runner
     if runner is not None:
         request.app.state.executor.submit(runner, store.path(session_id), store)
     return Response(status_code=202)
@@ -155,5 +152,5 @@ def complete(request: Request, session_id: str, authorization: Auth = None) -> R
 @router.get("/sessions/{session_id}/status")
 def status(request: Request, session_id: str, authorization: Auth = None) -> CustomerStatus:
     session = _customer(request, session_id, authorization)
-    raw = _store(request).load_json(session_id, "decision.json")
+    raw = _store(request).load(session_id, "decision")
     return customer_message(session["state"], Decision.model_validate(raw) if raw else None)
