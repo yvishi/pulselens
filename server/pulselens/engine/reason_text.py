@@ -25,6 +25,8 @@ REASON_TEXT: dict[str, str] = {
     "integrity.no_challenge": "Frames arrived although no challenge was ever issued.",
     "integrity.too_few_frames": "Too few frames arrived to judge the upload.",
     "integrity.batch_gaps": "Too many upload batches went missing to rely on the recording.",
+    # analysis.* (K4): the runner itself.
+    "analysis.error": "The analysis did not finish, so its checks could not judge this session.",
     # fusion.* (K6): the outcome sentence, first in Decision.reasons.
     "fusion.integrity_violation": "The session broke the capture protocol, so a person must review it.",
     "fusion.two_families": "Two independent kinds of evidence raised risk, so a person must review it.",
