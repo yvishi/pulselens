@@ -10,7 +10,7 @@ from pulselens.analysis.context import AnalysisContext, build_context
 from pulselens.analysis.quality import assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.bundle import load_bundle
-from tests.fixtures.synth import H, make_session
+from tests.fixtures.synth import H
 
 
 def _ctx(path: Path) -> AnalysisContext:
@@ -38,9 +38,9 @@ def _requalify(ctx: AnalysisContext) -> None:
                          thresholds=ctx.thresholds)
 
 
-@pytest.fixture(scope="module")
-def genuine(tmp_path_factory: pytest.TempPathFactory) -> AnalysisContext:
-    return _ctx(make_session(tmp_path_factory.mktemp("g"), kind="genuine", turn=None))
+@pytest.fixture
+def genuine(synth) -> AnalysisContext:
+    return synth.context(kind="genuine", turn=None)
 
 
 # --- light.face_neck ---------------------------------------------------------------------------------------------
@@ -56,54 +56,54 @@ def test_genuine_face_and_neck_answer_together(genuine: AnalysisContext) -> None
 
 
 @pytest.mark.parametrize("gain", [0.3, 3.0])
-def test_a_shirt_that_answers_weaker_or_stronger_is_not_flagged(tmp_path: Path, gain: float) -> None:
-    r = face_neck(_ctx(make_session(tmp_path, kind="genuine", turn=None, neck_gain=gain)))
+def test_a_shirt_that_answers_weaker_or_stronger_is_not_flagged(synth, gain: float) -> None:
+    r = face_neck(synth.context(kind="genuine", turn=None, neck_gain=gain))
     assert r.status == "usable" and not r.flag, r.explanation
 
 
-def test_a_neck_that_answers_while_the_face_does_not_is_flagged(tmp_path: Path) -> None:
-    r = face_neck(_ctx(make_session(tmp_path, kind="swap_no_face_echo", turn=None)))
+def test_a_neck_that_answers_while_the_face_does_not_is_flagged(synth) -> None:
+    r = face_neck(synth.context(kind="swap_no_face_echo", turn=None))
     assert r.flag and r.risk == 1.0 and "light.neck_only" in r.reason_codes
     # >= 5: a face noise frame that peaks over its threshold makes that step unclear, not silent (ported rule)
     assert r.features["neck_only_steps"] >= 5
     assert "neck" in r.explanation and "face" in r.explanation
 
 
-def test_a_face_echo_far_outside_the_neck_ratio_is_flagged(tmp_path: Path) -> None:
+def test_a_face_echo_far_outside_the_neck_ratio_is_flagged(synth) -> None:
     # The neck must still answer clearly (>= 2x its threshold), so a very weak neck needs quiet frames to be compared.
-    r = face_neck(_ctx(make_session(tmp_path, kind="genuine", turn=None, neck_gain=0.08, noise=0.001)))
+    r = face_neck(synth.context(kind="genuine", turn=None, neck_gain=0.08, noise=0.001))
     assert r.flag and "light.ratio" in r.reason_codes
     assert r.features["median_ratio"] > 5.66  # beyond ln 4 + half of ln 2
 
 
-def test_a_neck_too_weak_to_compare_abstains(tmp_path: Path) -> None:
-    r = face_neck(_ctx(make_session(tmp_path, kind="genuine", turn=None, neck_gain=0.1)))
+def test_a_neck_too_weak_to_compare_abstains(synth) -> None:
+    r = face_neck(synth.context(kind="genuine", turn=None, neck_gain=0.1))
     assert r.status == "abstain" and not r.flag and "light.weak_echoes" in r.reason_codes
 
 
-def test_a_noisy_face_is_unclear_not_silent(tmp_path: Path) -> None:
+def test_a_noisy_face_is_unclear_not_silent(synth) -> None:
     # The old repo's fix: a face whose threshold is too high to hear a quarter of the neck's echo is not "silent".
-    r = face_neck(_ctx(make_session(tmp_path, kind="swap_no_face_echo", turn=None, face_noise_gain=15)))
+    r = face_neck(synth.context(kind="swap_no_face_echo", turn=None, face_noise_gain=15))
     assert not r.flag and r.status == "abstain", r.explanation
     assert r.features["neck_only_steps"] == 0 and r.features["unclear_steps"] >= 4
 
 
-def test_a_neck_half_out_of_frame_abstains(tmp_path: Path) -> None:
+def test_a_neck_half_out_of_frame_abstains(synth) -> None:
     chin_y = H - 5.5 - 0.4 * 44  # 40% of the 44 px nominal neck box inside the frame
-    r = face_neck(_ctx(make_session(tmp_path, kind="genuine", turn=None, chin_y=chin_y)))
+    r = face_neck(synth.context(kind="genuine", turn=None, chin_y=chin_y))
     assert r.status == "abstain" and "quality.neck_hidden" in r.reason_codes and not r.flag
 
 
 def test_a_saturated_neck_abstains(genuine: AnalysisContext) -> None:
-    ctx = _ctx(genuine.bundle.path)
+    ctx = genuine
     ctx.regions["neck"].rgb_linear[:] = 0.99
     _requalify(ctx)
     r = face_neck(ctx)
     assert r.status == "abstain" and "quality.clipped" in r.reason_codes
 
 
-def test_no_echo_on_either_side_abstains(tmp_path: Path) -> None:
-    r = face_neck(_ctx(make_session(tmp_path, kind="replay", turn=None)))
+def test_no_echo_on_either_side_abstains(synth) -> None:
+    r = face_neck(synth.context(kind="replay", turn=None))
     assert r.status == "abstain" and "light.too_few_steps" in r.reason_codes and not r.flag
 
 
@@ -117,19 +117,19 @@ def test_genuine_background_answers_much_less_than_the_face(genuine: AnalysisCon
     assert "hypothesis" in r.explanation
 
 
-def test_a_background_that_answers_like_the_face_is_flagged(tmp_path: Path) -> None:
-    r = background(_ctx(make_session(tmp_path, kind="genuine", turn=None, background_echo=1.0)))
+def test_a_background_that_answers_like_the_face_is_flagged(synth) -> None:
+    r = background(synth.context(kind="genuine", turn=None, background_echo=1.0))
     assert r.flag and "light.background_even" in r.reason_codes
     assert r.features["median_bg_ratio"] > 0.8
 
 
-def test_a_weak_face_echo_abstains(tmp_path: Path) -> None:
-    r = background(_ctx(make_session(tmp_path, kind="replay", turn=None)))
+def test_a_weak_face_echo_abstains(synth) -> None:
+    r = background(synth.context(kind="replay", turn=None))
     assert r.status == "abstain" and "light.weak_face_echo" in r.reason_codes and not r.flag
 
 
 def test_too_little_background_abstains(genuine: AnalysisContext) -> None:
-    ctx = _ctx(genuine.bundle.path)
+    ctx = genuine
     ctx.regions["background"].coverage[:] = 0.05
     r = background(ctx)
     assert r.status == "abstain" and not r.flag
@@ -139,25 +139,25 @@ def test_too_little_background_abstains(genuine: AnalysisContext) -> None:
 
 
 @pytest.mark.parametrize("check", [light_face_neck, light_background])
-def test_light_not_in_the_plan_is_not_run(tmp_path: Path, check) -> None:
-    assert check.run(_ctx(make_session(tmp_path, kind="genuine", n_colour=0))) == []
+def test_light_not_in_the_plan_is_not_run(synth, check) -> None:
+    assert check.run(synth.context(kind="genuine", n_colour=0)) == []
 
 
 @pytest.mark.parametrize("check", [light_face_neck, light_background])
-def test_10_fps_abstains(tmp_path: Path, check) -> None:
-    [r] = check.run(_ctx(make_session(tmp_path, kind="genuine", turn=None, fps=10)))
+def test_10_fps_abstains(synth, check) -> None:
+    [r] = check.run(synth.context(kind="genuine", turn=None, fps=10))
     assert r.status == "abstain" and "quality.low_fps" in r.reason_codes
 
 
 @pytest.mark.parametrize("kind", ["genuine", "replay"])
 @pytest.mark.parametrize("noise", [0.06, 0.1])
-def test_heavy_noise_is_never_a_flag(tmp_path: Path, kind: str, noise: float) -> None:
-    ctx = _ctx(make_session(tmp_path, kind=kind, turn=None, noise=noise, seed=3))
+def test_heavy_noise_is_never_a_flag(synth, kind: str, noise: float) -> None:
+    ctx = synth.context(kind=kind, turn=None, noise=noise, seed=3)
     for check in (light_face_neck, light_background):
         for r in check.run(ctx):
             assert not r.flag, (r.check_id, r.explanation)
 
 
-def test_analyze_includes_both(tmp_path: Path) -> None:
-    ids = {r.check_id for r in analyze(make_session(tmp_path, kind="genuine", turn=None))}
+def test_analyze_includes_both(synth) -> None:
+    ids = {r.check_id for r in analyze(synth.session(kind="genuine", turn=None))}
     assert {"light.face_neck", "light.background"} <= ids

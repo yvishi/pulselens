@@ -50,6 +50,19 @@ PAINT_LAG_MS = 16.0  # from the step's scheduled start to the first painted fram
 TURN_DEG = 30.0
 _ENCODE_STEPS = 4096  # linear -> sRGB uint8 through a lookup table (pow on every pixel is the slow part)
 _ENCODE = np.round(linear_to_srgb(np.linspace(0, 1, _ENCODE_STEPS)) * 255).astype(np.uint8)
+_BANK_FIELDS, _BANK_PAD = 16, 32
+_bank: np.ndarray | None = None
+
+
+def _noise_field(rng: np.random.Generator) -> np.ndarray:
+    """A unit Gaussian (H, W, 3) noise field: a random crop of a fixed bank, so frames get different noise without
+    drawing 230k normals each (16 x 33 x 33 distinct fields; consecutive frames practically never share one)."""
+    global _bank
+    if _bank is None:
+        _bank = np.random.default_rng(12345).standard_normal(
+            (_BANK_FIELDS, H + _BANK_PAD, W + _BANK_PAD, 3), dtype=np.float32)
+    k, dy, dx = rng.integers(0, _BANK_FIELDS), rng.integers(0, _BANK_PAD + 1), rng.integers(0, _BANK_PAD + 1)
+    return _bank[k, dy:dy + H, dx:dx + W]
 
 LABEL_KIND = {"genuine": "genuine", "replay": "replay_screen", "swap_no_face_echo": "live_swap",
               "virtual_camera": "virtual_camera"}
@@ -203,7 +216,7 @@ def make_session(
             img[fy1:H, 130:190] = neck[i] + (rng.normal(0, noise / 5, 3) if noise else 0)
             img[fy0:fy1, fx0:fx1] = face[i] + (rng.normal(0, face_noise_gain * noise / 5, 3) if noise else 0)
         if noise:
-            img += rng.standard_normal(img.shape, dtype=np.float32) * np.float32(noise)
+            img += _noise_field(rng) * np.float32(noise)
         srgb = _ENCODE[np.clip(img * (_ENCODE_STEPS - 1) + 0.5, 0, _ENCODE_STEPS - 1).astype(np.int32)]
         ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
         assert ok

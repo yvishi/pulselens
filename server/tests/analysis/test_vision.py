@@ -102,3 +102,14 @@ def test_landmarker_runs_and_finds_no_face_in_a_blank_frame() -> None:
         assert lm.detect(np.full((H, W, 3), 128, dtype=np.uint8), 0.0) is None  # same t_ms twice is fine
     finally:
         lm.close()
+
+
+def test_region_means_of_a_uint8_frame_equal_linearising_every_pixel_first() -> None:
+    rng = np.random.default_rng(1)
+    img = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)
+    r = regions_from_landmarks(synthetic_landmarks(), W, H)
+    fast, slow = region_means(img, r), region_means(srgb_to_linear(img), r)
+    for name in fast:
+        assert fast[name][0] == pytest.approx(slow[name][0], rel=1e-12), name
+        assert fast[name][1] == slow[name][1]
+    assert region_means(img, None)["background"][0] == pytest.approx(srgb_to_linear(img).reshape(-1, 3).mean(0))
