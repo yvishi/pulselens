@@ -90,7 +90,11 @@ turn.identity:
   max_change: 0.15
 
 visual.sbi:
-  flag_at: 0.5
+  flag_at: 0.5               # provisional; G9 sets it from genuine set A
+  crops: 8
+  min_crops: 4
+  top_k: 3                   # risk = the mean of the top 3 crop scores
+  frontal_deg: 20            # crops from frames within this of the median yaw, when there are enough
 
 pulse.coherence:
   flag_at: 1.0
