@@ -27,6 +27,7 @@ from pulselens.contracts import (
 from pulselens.engine.auth import TokenSigner
 
 Clock = Callable[[], float]  # wall-clock milliseconds
+FINISHED: tuple[SessionState, ...] = ("analysing", "done")  # past /complete: never expires
 
 
 def _wall_ms() -> float:
@@ -120,21 +121,35 @@ class SessionStore:
     def set_state(self, session_id: str, state: SessionState) -> None:
         self.update(session_id, state=state)
 
-    def expired(self, session: dict[str, Any]) -> bool:
-        return self.clock() >= session["expires_at_ms"]
+    def effective_state(self, session: dict[str, Any]) -> SessionState:
+        """The state every reader sees: an unfinished session past its TTL is expired, even before it is saved so."""
+        if session["state"] not in FINISHED and self.clock() >= session["expires_at_ms"]:
+            return "expired"
+        return session["state"]
 
     # --- bundle files ---
 
     def save_model(self, session_id: str, name: str, model: BaseModel) -> None:
-        """e.g. name "plan" or "plan.json" → plan.json."""
-        filename = name if name.endswith(".json") else f"{name}.json"
+        """e.g. name "plan" → plan.json."""
         with self.lock(session_id):
-            (self.path(session_id) / filename).write_text(model.model_dump_json(), encoding="utf-8")
+            (self.path(session_id) / f"{name}.json").write_text(model.model_dump_json(), encoding="utf-8")
 
-    def load_json(self, session_id: str, filename: str) -> Any:
+    def save_once(self, session_id: str, name: str, model: BaseModel) -> bool:
+        """Writes name.json only if it does not exist yet (single use under concurrency). False if it existed."""
+        with self.lock(session_id):
+            if self.has(session_id, name):
+                return False
+            self.save_model(session_id, name, model)
+            return True
+
+    def has(self, session_id: str, name: str) -> bool:
+        return (self.path(session_id) / f"{name}.json").exists()
+
+    def load(self, session_id: str, name: str) -> Any:
+        """name.json parsed, or None when it is missing or unreadable."""
         with self.lock(session_id):
             try:
-                return json.loads((self.path(session_id) / filename).read_text(encoding="utf-8"))
+                return json.loads((self.path(session_id) / f"{name}.json").read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 return None
 
@@ -170,8 +185,8 @@ class SessionStore:
                 s = self.get(folder.name)
             except KeyError:
                 continue
-            plan = self.load_json(folder.name, "plan.json")
-            decision = self.load_json(folder.name, "decision.json")
+            plan = self.load(folder.name, "plan")
+            decision = self.load(folder.name, "decision")
             mode: Mode | None = Plan.model_validate(plan).mode if plan else None
             outcome = Decision.model_validate(decision).outcome if decision else None
             out.append(
@@ -180,7 +195,7 @@ class SessionStore:
                     created_at_ms=s["created_at_ms"],
                     product=s["product"],
                     attempt=s["attempt"],
-                    state="expired" if s["state"] != "done" and self.expired(s) else s["state"],
+                    state=self.effective_state(s),
                     mode=mode,
                     outcome=outcome,
                     label_kind=(s.get("label") or {}).get("kind"),
