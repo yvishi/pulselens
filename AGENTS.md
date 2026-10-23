@@ -57,8 +57,12 @@ If something needs a real phone, a person, a GPU, model weights or a decision: s
    - No names, real faces, real bank data or secrets in git.
    - `data/`, `models/` and `.env` are gitignored.
    - **This repo is public.**
-9. **Attack tooling is out of scope for code.** People record attacks with existing tools (OBS, Deep-Live-Cam, FaceFusion, LivePortrait), only on consenting teammates. Never write code that generates, improves or disguises deepfakes, or that helps evade detection. Detectors, fixtures, labelling and evaluation are in scope.
-10. **Tests use synthetic data.** No network, no real faces and no model weights are required in the default test run. Tests that need weights are skipped when the weights are missing.
+9. **Attack tooling is allowed for red-teaming our own system.** You may actively use, interact with and improve attack tooling (OBS, Deep-Live-Cam, FaceFusion, LivePortrait and code around them), under three conditions:
+   - **Never make malicious code public.** Attack code and its outputs stay out of this public repo and out of any public place.
+   - Keep all attack code, configs and generated media in `redteam/` at the repo root. It is gitignored; never move it elsewhere, and never commit it.
+   - **Use it only to test the capabilities of our own blue-team program (PulseLens).**
+   - **Only run it against programs running offline on a local system whose code we have**, to prevent accidental malicious activity. Never run it against third-party, online or production systems.
+10. **Tests use synthetic data.** No network, no real faces and no model weights are required in the default test run. Tests that need weights are skipped when the weights are missing. Real faces are allowed only with legal consent, and only on offline systems (and never committed to git, rule 8).
 11. **Mobile first.** Customer screens work at 360 px wide on Android Chrome before desktop polish.
 
 ## 5. Commands

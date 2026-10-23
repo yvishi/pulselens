@@ -23,4 +23,4 @@ Privacy and ethics:
 - No heart rate or pulse waveform is ever stored.
 - Volunteers are identified by pseudonymous codes only.
 - No real public figures and no real bank data.
-- The code detects; it never generates, improves or disguises deepfakes.
+- This repo contains only the detector. Attack tooling is used offline to red-team our own system, and no attack code is published.

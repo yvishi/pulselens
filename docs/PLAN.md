@@ -126,7 +126,7 @@ Record each decision in `docs/status/ganeev.md` under "Decisions". The deck show
 
 **Ethics (always):**
 - Attack tools are run by a human, only on consenting teammates.
-- No code in this repo generates, improves or disguises deepfakes.
+- Red-team work with attack tooling follows `AGENTS.md` rule 9: only against our own PulseLens running offline on a local system; attack code and its outputs never go into this public repo.
 - No real public figures.
 - No real bank data.
 
