@@ -3,6 +3,7 @@ import { frameUrl } from "../api/client";
 import type { SessionReport } from "../contracts";
 
 export interface EvidenceFrame {
+  kind: "colour" | "turn";
   label: string;
   idx: number;
 }
@@ -20,14 +21,14 @@ export function pickEvidenceFrames(report: SessionReport, max = 6): EvidenceFram
   const out: EvidenceFrame[] = [];
   for (const s of challenge.steps) {
     const e = shown.get(s.step_id);
-    if (s.kind === "colour" && e?.painted_t_ms != null) out.push({ label: `${s.step_id} (hue ${s.hue_deg}°)`, idx: at(e.painted_t_ms) });
+    if (s.kind === "colour" && e?.painted_t_ms != null) out.push({ kind: "colour", label: `${s.step_id} (hue ${s.hue_deg}°)`, idx: at(e.painted_t_ms) });
     if (s.kind === "turn") {
       const start = e?.painted_t_ms ?? challenge.baseline_ms + s.start_offset_ms;
-      out.push({ label: `${s.step_id} turn ${s.direction}`, idx: at(start + s.duration_ms / 2) });
+      out.push({ kind: "turn", label: `${s.step_id} turn ${s.direction}`, idx: at(start + s.duration_ms / 2) });
     }
   }
-  const colours = out.filter((f) => !f.label.includes("turn")).slice(0, max - 1);
-  return [...colours, ...out.filter((f) => f.label.includes("turn"))].slice(0, max);
+  const colours = out.filter((f) => f.kind === "colour").slice(0, max - 1);
+  return [...colours, ...out.filter((f) => f.kind === "turn")].slice(0, max);
 }
 
 function Thumb({ sessionId, frame, passcode }: { sessionId: string; frame: EvidenceFrame; passcode: string }) {

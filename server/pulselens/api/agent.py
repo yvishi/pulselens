@@ -5,26 +5,20 @@ The agent decides; these routes only show evidence and record what the agent cho
 
 from __future__ import annotations
 
-import json
-import time
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import TypeAdapter, ValidationError
 
+from pulselens.api.common import session_or_404, store
 from pulselens.bundle import frame_name, load_bundle
 from pulselens.contracts import AgentDecision, CheckResult, Decision, SessionReport, SessionSummary
 from pulselens.engine.auth import passcode_ok
-from pulselens.engine.store import SessionStore
 
 router = APIRouter(prefix="/api")
 RESULTS = TypeAdapter(list[CheckResult])
 Passcode = Annotated[str | None, Header(alias="X-Agent-Passcode")]
-
-
-def _store(request: Request) -> SessionStore:
-    return request.app.state.store
 
 
 def _agent(request: Request, passcode: str | None) -> None:
@@ -32,57 +26,45 @@ def _agent(request: Request, passcode: str | None) -> None:
         raise HTTPException(401, "unauthorized")
 
 
-def _session(request: Request, session_id: str) -> dict[str, Any]:
-    try:
-        return _store(request).get(session_id)
-    except KeyError:
-        raise HTTPException(404, "unknown_session") from None
-
-
 @router.get("/sessions")
 def list_sessions(request: Request, x_agent_passcode: Passcode = None) -> list[SessionSummary]:
     _agent(request, x_agent_passcode)
-    return _store(request).list()
+    return store(request).list()
 
 
 @router.get("/sessions/{session_id}/result")
 def result(request: Request, session_id: str, x_agent_passcode: Passcode = None) -> SessionReport:
     _agent(request, x_agent_passcode)
-    session = _session(request, session_id)
-    store = _store(request)
-    bundle = load_bundle(store.path(session_id))
+    session = session_or_404(request, session_id)
+    s = store(request)
+    bundle = load_bundle(s.path(session_id))
     try:
-        results = RESULTS.validate_python(store.load_json(session_id, "results.json") or [])
+        results = RESULTS.validate_python(s.load(session_id, "results") or [])
     except ValidationError:
         results = []
-    raw_decision = store.load_json(session_id, "decision.json")
-    raw_agent = store.load_json(session_id, "agent.json")
-    state = session["state"]
-    if state not in ("analysing", "done") and store.expired(session):
-        state = "expired"
+    decision, agent = s.load(session_id, "decision"), s.load(session_id, "agent")
     return SessionReport(
         session_id=session_id,
         product=session["product"],
         attempt=session["attempt"],
-        state=state,
+        state=s.effective_state(session),
         label=bundle.label,
         preflight=bundle.preflight,
         plan=bundle.plan,
         challenge=bundle.challenge,
         events=bundle.events,
-        frame_count=store.frame_count(session_id),
+        frame_count=s.frame_count(session_id),
         results=results,
-        decision=Decision.model_validate(raw_decision) if raw_decision else None,
-        agent_decision=AgentDecision.model_validate(
-            {k: v for k, v in raw_agent.items() if k in AgentDecision.model_fields}) if raw_agent else None,
+        decision=Decision.model_validate(decision) if decision else None,
+        agent_decision=AgentDecision.model_validate(agent) if agent else None,
     )
 
 
 @router.get("/sessions/{session_id}/frames/{idx}.jpg")
 def frame(request: Request, session_id: str, idx: int, x_agent_passcode: Passcode = None) -> FileResponse:
     _agent(request, x_agent_passcode)
-    _session(request, session_id)
-    path = _store(request).path(session_id) / "frames" / frame_name(idx)
+    session_or_404(request, session_id)
+    path = store(request).path(session_id) / "frames" / frame_name(idx)
     if idx < 0 or not path.exists():
         raise HTTPException(404, "unknown_frame")
     return FileResponse(path, media_type="image/jpeg")
@@ -91,13 +73,11 @@ def frame(request: Request, session_id: str, idx: int, x_agent_passcode: Passcod
 @router.post("/sessions/{session_id}/agent", status_code=204)
 def agent_decision(request: Request, session_id: str, body: AgentDecision,
                    x_agent_passcode: Passcode = None) -> Response:
-    """Records the agent's action. `agent.json` also keeps when it was taken (`at_ms`), for the console."""
+    """Records the agent's action as agent.json (when it was taken goes into the audit log, K8)."""
     _agent(request, x_agent_passcode)
-    _session(request, session_id)
-    store = _store(request)
-    if store.load_json(session_id, "decision.json") is None:
+    session_or_404(request, session_id)
+    s = store(request)
+    if not s.has(session_id, "decision"):
         raise HTTPException(409, "no_decision_yet")
-    payload = {**body.model_dump(), "at_ms": int(time.time() * 1000)}
-    with store.lock(session_id):
-        (store.path(session_id) / "agent.json").write_text(json.dumps(payload), encoding="utf-8")
+    s.save_model(session_id, "agent", body)
     return Response(status_code=204)

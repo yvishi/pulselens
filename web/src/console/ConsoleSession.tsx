@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ApiError, getResult } from "../api/client";
-import type { Family, SessionReport } from "../contracts";
+import { getResult } from "../api/client";
+import type { Family } from "../contracts";
 import { HonestyLabel } from "../shared/HonestyLabel";
 import { AgentActions } from "./AgentActions";
 import "./console.css";
@@ -11,40 +11,19 @@ import { OutcomeBanner } from "./OutcomeBanner";
 import { PasscodeGate } from "./PasscodeGate";
 import { modeReason } from "./reasonText";
 import { Timeline } from "./Timeline";
+import { POLL_ERROR_TEXT, usePoll } from "./usePoll";
 
 const POLL_MS = 1000;
 const FAMILIES: Family[] = ["A", "B", "C", "D"];
 
 function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; passcode: string; onUnauthorized: () => void }) {
-  const [report, setReport] = useState<SessionReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
-
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      try {
-        const r = await getResult(sessionId, passcode);
-        if (!alive) return;
-        setReport(r);
-        setError(null);
-        if (r.decision) return; // decided: stop polling until an action refreshes
-      } catch (e) {
-        if (!alive) return;
-        if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-        setError(e instanceof ApiError && e.status === 404 ? "Unknown session." : "The PulseLens server is unreachable. Retrying…");
-        if (e instanceof ApiError && e.status === 404) return;
-      }
-      if (alive) timer = setTimeout(poll, POLL_MS);
-    };
-    void poll();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [sessionId, passcode, onUnauthorized, tick]);
+  const [actions, setActions] = useState(0); // bumped after an agent action, to fetch the report again
+  const { value: report, error: pollError } = usePoll(() => getResult(sessionId, passcode), POLL_MS, {
+    done: (r) => r.decision !== null, // decided: nothing changes until the agent acts
+    onUnauthorized,
+    key: `${sessionId}|${passcode}|${actions}`,
+  });
+  const error = pollError && POLL_ERROR_TEXT[pollError];
 
   if (!report) {
     return (
@@ -104,7 +83,7 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
       </section>
       <EvidenceFrames report={report} passcode={passcode} />
       <AgentActions sessionId={report.session_id} product={report.product} passcode={passcode}
-        hasDecision={Boolean(decision)} recorded={report.agent_decision} onRecorded={refresh} />
+        hasDecision={Boolean(decision)} recorded={report.agent_decision} onRecorded={() => setActions((n) => n + 1)} />
     </main>
   );
 }

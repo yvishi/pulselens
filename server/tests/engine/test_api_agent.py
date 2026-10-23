@@ -96,7 +96,7 @@ def test_agent_action_needs_a_decision_and_is_recorded(client: TestClient, tmp_p
     r = client.post(f"/api/sessions/{sid}/agent", headers=PASS, json={"action": "escalate", "note": "check ID"})
     assert r.status_code == 204
     stored = json.loads((tmp_path / "data" / sid / "agent.json").read_text())
-    assert stored["action"] == "escalate" and stored["note"] == "check ID" and stored["at_ms"] > 0
+    assert stored == {"action": "escalate", "note": "check ID"}  # exactly the contract's AgentDecision
     assert client.get(f"/api/sessions/{sid}/result", headers=PASS).json()["agent_decision"] == {
         "action": "escalate", "note": "check ID"}
     assert client.post(f"/api/sessions/{sid}/agent", headers=PASS, json={"action": "fire"}).status_code == 422
