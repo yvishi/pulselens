@@ -1,6 +1,7 @@
 // The capture screens shared by the customer page and the Lab page: the <video>, the CaptureSession wiring (overlay,
 // ring turn prompt, language) and the phase -> screen mapping. CaptureSession drives everything; this only renders it.
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { startTap, type DeviceSession } from "../capture/device";
 import { CaptureSession, type CaptureState } from "../capture/session";
 import "./customer.css";
 import { Coaching } from "./steps/Coaching";
@@ -40,11 +41,23 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
   );
   const video = useRef<HTMLVideoElement>(null);
   const session = useRef<CaptureSession | null>(null);
+  const device = useRef<DeviceSession | null>(null);
 
-  useEffect(() => () => session.current?.dispose(), []);
+  useEffect(
+    () => () => {
+      session.current?.dispose();
+      device.current?.release();
+    },
+    [],
+  );
+  // The session is over: give back the wake lock and leave fullscreen.
+  useEffect(() => {
+    if (state.phase === "result" || state.phase === "error") device.current?.release();
+  }, [state.phase]);
 
   const start = (noFlashRequested: boolean) => {
     if (session.current || !video.current) return;
+    device.current = startTap(); // first, synchronously inside the click: fullscreen, wake lock, iOS motion prompt
     const s = new CaptureSession({
       sessionId, token, video: video.current, overlayRoot: document.body, onState: setState,
       turnText: (dir) => t(turnKey(dir), lang),

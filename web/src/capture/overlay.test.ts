@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { now } from "./clock";
 import { isoluminantColour } from "./colour";
-import { LightOverlay } from "./overlay";
+import { LightOverlay, viewportHeight } from "./overlay";
 
 let overlay: LightOverlay | null = null;
-afterEach(() => overlay?.dispose());
+afterEach(() => {
+  overlay?.dispose();
+  vi.unstubAllGlobals();
+});
 
 describe("LightOverlay", () => {
   it("paints full-screen and reports times since t0", async () => {
@@ -35,5 +38,27 @@ describe("LightOverlay", () => {
     expect(overlay.prompt.style.background).toBe("rgba(0, 0, 0, 0.5)");
     overlay.dispose();
     expect(document.body.contains(overlay.element)).toBe(false);
+  });
+
+  it("covers the whole dynamic viewport in fullscreen mode (iPhone has no Fullscreen API)", () => {
+    vi.stubGlobal("CSS", { supports: (p: string, v: string) => p === "height" && v === "100dvh" });
+    overlay = new LightOverlay(document.body, "fullscreen");
+    const s = overlay.element.style;
+    expect(s.position).toBe("fixed");
+    expect([s.top, s.left, s.right]).toEqual(["0px", "0px", "0px"]);
+    expect(s.width).toBe("100%");
+    expect(s.height).toBe("100dvh");
+  });
+
+  it("falls back to 100vh where dvh is unknown", () => {
+    vi.stubGlobal("CSS", { supports: () => false });
+    expect(viewportHeight()).toBe("100vh");
+    vi.stubGlobal("CSS", undefined);
+    expect(viewportHeight()).toBe("100vh");
+  });
+
+  it("leaves the border mode's box to inset: 0", () => {
+    overlay = new LightOverlay(document.body, "border");
+    expect(overlay.element.style.height).toBe("");
   });
 });

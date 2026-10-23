@@ -70,6 +70,8 @@
 .customer video.selfview-shown {
   top: 8px;
   right: 8px;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
   width: 25vw;
 }
 
@@ -107,4 +109,12 @@
   padding-left: 1.25rem;
   font-size: 1.15rem;
   overflow-wrap: anywhere;
+}
+
+/* Phones during the challenge: no page scroll or pull-to-refresh under the light overlay (iPhone Safari has no
+   Fullscreen API, so the overlay is a fixed 100dvh layer over the page and a scroll would shift the page under it). */
+html:has(.customer[data-phase="challenge"]),
+html:has(.customer[data-phase="challenge"]) body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
