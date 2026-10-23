@@ -1,20 +1,59 @@
-"""FastAPI app. Routes arrive with K2 (sessions) and K7 (agent)."""
+"""FastAPI app: health, the customer session API (K2); agent routes arrive with K7."""
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
 from fastapi import FastAPI
 
-from pulselens.config import Settings, get_settings
+from pulselens.api import sessions
+from pulselens.config import Settings, get_settings, load_config
+from pulselens.engine.store import Clock, SessionStore, _wall_ms
+
+# run_analysis(session_dir, store): runs after /complete on a worker thread and writes the decision (K4).
+Runner = Callable[[Path, SessionStore], Any]
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    app = FastAPI(title="PulseLens", version="0.1.0")
-    app.state.settings = settings or get_settings()
+def _default_runner() -> Runner | None:
+    try:
+        from pulselens.engine.runner import run_analysis  # K4
+    except ImportError:
+        return None
+    return run_analysis
+
+
+def create_app(
+    settings: Settings | None = None,
+    *,
+    run_analysis: Runner | None = None,
+    clock: Clock = _wall_ms,
+    config: dict[str, Any] | None = None,
+) -> FastAPI:
+    settings = settings or get_settings()
+    config = config or load_config()
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    app = FastAPI(title="PulseLens", version="0.1.0", lifespan=lifespan)
+    app.state.settings = settings
+    app.state.config = config
+    app.state.store = SessionStore(settings.data_dir, ttl_min=config["session"]["ttl_min"], clock=clock)
+    app.state.executor = executor
+    app.state.run_analysis = run_analysis or _default_runner()
 
     @app.get("/api/health")
     def health() -> dict[str, bool]:
         return {"ok": True}
 
+    app.include_router(sessions.router)
     return app
 
 
