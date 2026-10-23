@@ -25,6 +25,7 @@ from pulselens.contracts import (
     SessionCreate,
     SessionCreated,
 )
+from pulselens.engine import audit
 from pulselens.engine.auth import bearer
 from pulselens.engine.fusion import customer_message
 from pulselens.engine.planner import make_challenge, plan_session, rng_for_nonce
@@ -85,8 +86,10 @@ def challenge(request: Request, session_id: str, authorization: Auth = None) -> 
     nonce = session["nonce"]
     issued = make_challenge(Plan.model_validate(raw_plan), session_id, nonce, rng_for_nonce(nonce),
                             request.app.state.config)
-    if not store.save_once(session_id, "challenge", issued):  # single use, even under concurrent requests
-        raise HTTPException(409, "challenge_already_issued")
+    with store.lock(session_id):
+        if not store.save_once(session_id, "challenge", issued):  # single use, even under concurrent requests
+            raise HTTPException(409, "challenge_already_issued")
+        audit.append(store.path(session_id), "challenge.issued", issued.model_dump(mode="json"))
     store.set_state(session_id, "capturing")
     return issued
 
