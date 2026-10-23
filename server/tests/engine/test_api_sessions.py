@@ -254,7 +254,7 @@ def test_store_lists_newest_first(client: TestClient, clock: Clock) -> None:
 def test_analysing_past_ttl_is_not_expired_anywhere(tmp_path: Path, clock: Clock) -> None:
     """A session past /complete never expires: the customer status and the store list agree (one state rule)."""
     settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data2", fake_analysis=True)
-    with TestClient(create_app(settings, run_analysis=lambda *_: None, clock=clock)) as c:  # analysis never finishes
+    with TestClient(create_app(settings, runner=lambda *_: None, clock=clock)) as c:  # analysis never finishes
         s = create(c)
         ready(c, s)
         assert c.post(f"/api/sessions/{s['session_id']}/complete", headers=auth(s)).status_code == 202

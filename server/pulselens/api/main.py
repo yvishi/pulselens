@@ -20,9 +20,10 @@ from pulselens.engine.store import Clock, SessionStore, _wall_ms
 Runner = Callable[[Path, SessionStore], Any]
 
 
-def _default_runner(settings: Settings, config: dict[str, Any]) -> Runner:
+def _default_runner(settings: Settings, config: dict[str, Any], pool: ThreadPoolExecutor) -> Runner:
     """K4's runner: Ganeev's analyze(), or the fake one when PULSE_FAKE_ANALYSIS=1 (or no analyze exists)."""
-    return functools.partial(run_analysis, fake=settings.fake_analysis, timeout_s=config["analysis"]["timeout_s"])
+    return functools.partial(run_analysis, pool=pool, fake=settings.fake_analysis,
+                             timeout_s=config["analysis"]["timeout_s"])
 
 
 def create_app(
@@ -34,19 +35,22 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     config = config or load_config()
-    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")  # one runner per completed session
+    analyze_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analyze")  # analyze() under its timeout
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
         executor.shutdown(wait=False, cancel_futures=True)
+        analyze_pool.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title="PulseLens", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.config = config
     app.state.store = SessionStore(settings.data_dir, ttl_min=config["session"]["ttl_min"], clock=clock)
     app.state.executor = executor
-    app.state.run_analysis = runner or _default_runner(settings, config)
+    app.state.analyze_pool = analyze_pool
+    app.state.runner = runner or _default_runner(settings, config, analyze_pool)
 
     @app.get("/api/health")
     def health() -> dict[str, bool]:

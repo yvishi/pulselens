@@ -9,15 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from pulselens.contracts import CheckResult
+from pulselens.engine.results import usable
 
 EXPLANATION = "FAKE ANALYSIS: not a real measurement."
 
 
 def analyze(session_dir: Path) -> list[CheckResult]:  # noqa: ARG001 -- same signature as the real analyze
-    return [
-        CheckResult(
-            check_id=f"fake.{family.lower()}", family=family, vote_group=f"{family}.fake", status="usable", risk=0.0,
-            flag=False, quality=1.0, explanation=EXPLANATION, window_id="all", threshold_source="provisional",
-        )
-        for family in ("B", "C", "D")
-    ]
+    return [usable(f"fake.{f.lower()}", EXPLANATION, family=f, vote_group=f"{f}.fake", source="provisional")
+            for f in ("B", "C", "D")]

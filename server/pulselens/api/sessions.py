@@ -143,7 +143,7 @@ def complete(request: Request, session_id: str, authorization: Auth = None) -> R
         raise HTTPException(409, "already_complete")
     store = _store(request)
     store.set_state(session_id, "analysing")
-    runner = request.app.state.run_analysis
+    runner = request.app.state.runner
     if runner is not None:
         request.app.state.executor.submit(runner, store.path(session_id), store)
     return Response(status_code=202)
