@@ -20,9 +20,9 @@ def _by_id(results) -> dict:
     return {r.check_id: r for r in results}
 
 
-@pytest.fixture(scope="module")
-def genuine_ctx(tmp_path_factory: pytest.TempPathFactory) -> AnalysisContext:
-    return _ctx(make_session(tmp_path_factory.mktemp("g"), kind="genuine", turn=None))
+@pytest.fixture
+def genuine_ctx(synth) -> AnalysisContext:
+    return synth.context(kind="genuine", turn=None)
 
 
 def test_genuine_jittered_30_fps_is_not_flagged(genuine_ctx: AnalysisContext) -> None:
@@ -36,7 +36,7 @@ def test_genuine_jittered_30_fps_is_not_flagged(genuine_ctx: AnalysisContext) ->
 
 
 def test_a_1_2_s_gap_flags_a_stall(genuine_ctx: AnalysisContext) -> None:
-    ctx = _ctx(genuine_ctx.bundle.path)
+    ctx = genuine_ctx
     ctx.t[100:] += 1200
     r = _by_id(run(ctx))["sensor.cadence"]
     assert r.flag and r.risk == 1.0 and "sensor.stall" in r.reason_codes
@@ -44,8 +44,8 @@ def test_a_1_2_s_gap_flags_a_stall(genuine_ctx: AnalysisContext) -> None:
     assert f"{r.features['longest_gap_ms']:.0f} ms" in r.explanation
 
 
-def test_a_virtual_camera_clock_is_too_regular(tmp_path: Path) -> None:
-    r = _by_id(run(_ctx(make_session(tmp_path, kind="virtual_camera", turn=None))))["sensor.cadence"]
+def test_a_virtual_camera_clock_is_too_regular(synth) -> None:
+    r = _by_id(run(synth.context(kind="virtual_camera", turn=None)))["sensor.cadence"]
     assert r.risk >= 0.7 and r.flag and "sensor.too_regular" in r.reason_codes
 
 
@@ -61,8 +61,8 @@ def test_ten_percent_exact_repeats_flag_duplicates(tmp_path: Path) -> None:
     assert r.features["longest_dup_run"] == 1
 
 
-def test_twenty_frames_abstain(tmp_path: Path) -> None:
-    ctx = _ctx(make_session(tmp_path, kind="genuine", turn=None, n_colour=0, fps=10))
+def test_twenty_frames_abstain(synth) -> None:
+    ctx = synth.context(kind="genuine", turn=None, n_colour=0, fps=10)
     assert ctx.n == 20
     for r in run(ctx):
         assert r.status == "abstain" and r.risk is None and not r.flag
@@ -90,6 +90,6 @@ def test_duplicate_runs() -> None:
     assert duplicate_runs(np.zeros(4, dtype=bool)) == 0
 
 
-def test_analyze_now_runs_the_stream_checks(tmp_path: Path) -> None:
-    ids = {r.check_id for r in analyze(make_session(tmp_path, kind="genuine", turn=None, n_colour=2))}
+def test_analyze_now_runs_the_stream_checks(synth) -> None:
+    ids = {r.check_id for r in analyze(synth.session(kind="genuine", turn=None, n_colour=2))}
     assert {"sensor.cadence", "sensor.duplicates"} <= ids

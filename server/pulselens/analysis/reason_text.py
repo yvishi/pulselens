@@ -34,6 +34,8 @@ REASON_TEXT: dict[str, str] = {
     "light.ratio": "The face and neck answered the light with very different strengths.",
     "light.background_even": "The background answered the light as strongly as the face.",
     "light.weak_face_echo": "The face's response to the light was too weak to compare.",
+    "light.weak_echoes": "The face and neck responses were too close to the noise to compare.",
+    "light.background_hidden": "Too little of the background was visible to compare with the face.",
     # family D: turn and visual (G6, G7, G10)
     "turn.not_performed": "The head turn was not performed.",
     "turn.wrong_direction": "The head turned the opposite way to the prompt.",
