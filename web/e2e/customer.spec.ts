@@ -1,5 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { chromium, expect, test, type Page } from "@playwright/test";
 import { WEB, createSession, readBundle } from "./support/bundle";
+import { REPLAY_API, REPLAY_Y4M, bundleToY4m, startRealServer, stopServer, waitForReport } from "./support/replay";
 
 // Y4: the customer flow in Brave's fake camera, against the real server with PULSE_FAKE_ANALYSIS=1 and
 // PULSE_DATA_DIR=data/e2e (both set by playwright.config.ts).
@@ -91,4 +92,50 @@ test("360px no sideways scroll on every customer phase", async ({ page }) => {
   await page.goto(`${WEB}/customer/${created.session_id}`);
   await expect(page.getByRole("alert")).toContainText("ask the agent for a new link");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+// Y10: the replay attack. A genuine recorded session (REPLAY_SESSION_DIR, e.g. data/sessions/<id> from /lab) is played
+// back as the camera; it cannot answer this session's colours, so real analysis must not PASS it. Opt-in only:
+//   REPLAY_SESSION_DIR=... npx playwright test --grep @real-analysis
+// Without REPLAY_SESSION_DIR it skips, so the default run is unaffected.
+test("@real-analysis replay is not PASS", async ({ request }, testInfo) => {
+  const sessionDir = process.env.REPLAY_SESSION_DIR;
+  test.skip(!sessionDir, "set REPLAY_SESSION_DIR to a genuine recorded session dir (data/sessions/<id>) to run it");
+  test.setTimeout(420_000);
+  const passcode = process.env.AGENT_PASSCODE ?? "e2e-passcode";
+  const y4m = bundleToY4m(sessionDir!, REPLAY_Y4M);
+
+  const server = await startRealServer(request, passcode);
+  const { launchOptions, headless } = testInfo.project.use;
+  const browser = await chromium.launch({
+    executablePath: launchOptions?.executablePath,
+    headless: headless ?? true,
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+      `--use-file-for-fake-video-capture=${y4m}`,
+    ],
+  });
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, permissions: ["camera"] });
+    const page = await context.newPage();
+    // The app's /api calls go to the real-analysis server instead of the shared fake one on :8000.
+    await page.route(`${WEB}/api/**`, (route) => route.continue({ url: route.request().url().replace(WEB, REPLAY_API) }));
+    const created = await createSession(request, {}, REPLAY_API);
+    await page.goto(`${WEB}${created.customer_url}`);
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    const main = page.locator("main.customer");
+    await expect(main).toHaveAttribute("data-phase", /^(result|error)$/, { timeout: 180_000 });
+    expect(await main.getAttribute("data-phase"), await main.innerText()).toBe("result");
+
+    const report = await waitForReport(request, created.session_id, passcode);
+    testInfo.annotations.push({
+      type: "decision",
+      description: `${report.decision!.outcome} ${report.decision!.step_up ?? ""}: ${report.decision!.reasons.join(" | ")}`,
+    });
+    expect(report.decision!.outcome).not.toBe("PASS");
+  } finally {
+    await browser.close();
+    stopServer(server);
+  }
 });
