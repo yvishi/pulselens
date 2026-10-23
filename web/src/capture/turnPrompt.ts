@@ -1,7 +1,7 @@
 /**
  * The v1 turn prompt: text and an arrow on the light overlay, with a small mirrored self-view (top corner, <= 25%
- * of the width) raised above the overlay for the turn only. Y5 replaces this with the full prompt and progress ring;
- * CaptureSession takes any `TurnPromptFactory`, so the swap is one option.
+ * of the width) raised above the overlay for the turn only. The customer flow uses the Y5 prompt with the progress
+ * ring (customer/steps/TurnPrompt.tsx), which falls back to this one when the face tracker cannot load.
  *
  * The client never judges the turn; the prompt ends after durationMs whatever happened.
  */
