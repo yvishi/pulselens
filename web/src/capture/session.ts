@@ -1,10 +1,11 @@
 /**
  * One customer (or Lab) capture session, start to result. React only renders the state this reports.
  *
- * camera -> runPreflight -> postPreflight (Plan) -> getChallenge -> FrameGrabber (t0 = challenge start) + runChallenge
+ * camera -> runPreflight (+ coaching measure) -> up to 3 coaching rounds, then runPreflight again -> postPreflight (Plan) -> getChallenge -> FrameGrabber (t0 = challenge start) + runChallenge
  * on a LightOverlay -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
  *
- * The server's plan decides what runs: a NO_FLASH challenge has no colour steps, so nothing is painted.
+ * The server's plan decides what runs: on a NO_FLASH plan (or run_light false) every colour step is skipped
+ * ("no_flash"), so nothing is painted and only the turn runs; the agent then asks a few questions.
  * completeSession is never called while a frame batch is in flight (the uploader is flushed or stopped first).
  * Every dependency is injectable, so the Lab page and the tests reuse the same flow.
  */
@@ -13,13 +14,15 @@ import { ApiError } from "../api/client";
 import type { Challenge, ChallengeEvent, CustomerMessage, CustomerStatus, FrameBatchMeta, Plan, Preflight } from "../contracts";
 import { openCamera, stopCamera, type OpenCamera } from "./camera";
 import { runChallenge } from "./challenge";
+import { COACH_ROUNDS, COACH_ROUND_MS, coachTips, createCoachMeter, type CoachMeter, type CoachTip } from "./coaching";
 import { now } from "./clock";
 import { DESKTOP_SIZE, JPEG_QUALITY, MOBILE_SIZE, UPLOAD_BATCH_MS } from "./constants";
 import { platformOf, secureContextError } from "./env";
 import { sleep } from "./flash";
 import { FrameGrabber, type GrabberOptions, type GrabberStats } from "./grabber";
 import { LightOverlay, chooseOverlayMode, type OverlayMode } from "./overlay";
-import { runPreflight } from "./preflight";
+import { createFaceTracker, type FaceTracker } from "./face";
+import { PREFLIGHT_MS, runPreflight } from "./preflight";
 import { textTurnPrompt, type TurnDirection, type TurnPromptFactory } from "./turnPrompt";
 import { FrameUploader, type UploaderOptions, type UploaderStats } from "./uploader";
 
@@ -39,6 +42,8 @@ export interface CaptureState {
   detail?: string;
   /** from the Plan, once known: the agent will ask a few questions (no-flash path, no face found) */
   agentQuestions?: boolean;
+  /** coaching: at most 2 tips for this round */
+  tips?: CoachTip[];
 }
 
 export interface CaptureApi {
@@ -80,6 +85,7 @@ export interface CaptureSessionDeps {
   createGrabber: (video: HTMLVideoElement, opts: GrabberOptions) => SessionGrabber;
   createUploader: (opts: UploaderOptions) => SessionUploader;
   runChallenge: typeof runChallenge;
+  createCoachMeter: (video: HTMLVideoElement) => CoachMeter;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
 }
@@ -108,6 +114,10 @@ export const ENCODE_SETTLE_MS = 200;
 
 const DEFAULT_TURN_TEXT = (dir: TurnDirection) => `Turn your head to your ${dir.toUpperCase()}, then back to the centre`;
 
+/** One face tracker per page, shared by the preflight and the coaching meter (loading it twice is slow). */
+let sharedTracker: Promise<FaceTracker | null> | null = null;
+const faceTracker = () => (sharedTracker ??= createFaceTracker().catch(() => null));
+
 export const defaultDeps = (): CaptureSessionDeps => ({
   api: client,
   secureContextError,
@@ -117,12 +127,14 @@ export const defaultDeps = (): CaptureSessionDeps => ({
   },
   openCamera,
   stopCamera,
-  runPreflight: (video, cam, opts) => runPreflight(video, cam, opts),
+  runPreflight: (video, cam, opts) =>
+    runPreflight(video, cam, opts, { faceTracker: async () => (await faceTracker()) ?? Promise.reject(new Error("no face")) }),
   chooseOverlayMode: (desktop) => chooseOverlayMode(desktop),
   createOverlay: (root, mode, t0) => new LightOverlay(root, mode, { t0 }),
   createGrabber: (video, opts) => new FrameGrabber(video, opts),
   createUploader: (opts) => new FrameUploader(opts),
   runChallenge,
+  createCoachMeter: (video) => createCoachMeter(video, faceTracker()),
   now,
   sleep,
 });
@@ -163,7 +175,7 @@ export class CaptureSession {
 
   private set(patch: Partial<CaptureState> & { phase: CustomerPhase }): void {
     if (this.disposed) return;
-    this.state = { ...this.state, detail: undefined, ...patch };
+    this.state = { ...this.state, detail: undefined, tips: undefined, ...patch };
     this.opts.onState(this.state);
   }
 
@@ -183,13 +195,13 @@ export class CaptureSession {
         throw new CameraFailed(cameraError(e));
       });
 
-      this.set({ phase: "preflight" });
-      const preflight = await d.runPreflight(video, this.cam, { noFlashRequested });
+      const preflight = await this.preflightWithCoaching(this.cam, noFlashRequested);
       const plan = await d.api.postPreflight(id, token, preflight);
       const challenge = await d.api.getChallenge(id, token);
 
       this.set({ phase: "challenge", agentQuestions: plan.agent_questions });
-      const events = await this.capture(challenge, size, await overlayMode);
+      const noFlash = plan.mode === "NO_FLASH" || !plan.run_light;
+      const events = await this.capture(challenge, size, await overlayMode, noFlash);
 
       this.set({ phase: "uploading" });
       await d.api.postEvents(id, token, events);
@@ -212,8 +224,34 @@ export class CaptureSession {
     }
   }
 
+  /**
+   * Preflight, measured alongside the coaching meter. If tips fire, up to 3 coaching rounds of 3 s (the tips stay up
+   * while the next round measures), then continue anyway with a fresh preflight: the server's planner decides the mode.
+   */
+  private async preflightWithCoaching(cam: OpenCamera, noFlashRequested: boolean): Promise<Preflight> {
+    const d = this.deps;
+    const { video } = this.opts;
+    this.set({ phase: "preflight" });
+    const meter = d.createCoachMeter(video);
+    const [first, metrics] = await Promise.all([
+      d.runPreflight(video, cam, { noFlashRequested }),
+      meter.measure(PREFLIGHT_MS).catch(() => null),
+    ]);
+    let tips = metrics ? coachTips(metrics) : [];
+    if (!tips.length) return first;
+    for (let round = 1; round <= COACH_ROUNDS && tips.length; round++) {
+      this.set({ phase: "coaching", tips });
+      const m = await meter.measure(COACH_ROUND_MS).catch(() => null);
+      tips = m ? coachTips(m) : [];
+    }
+    this.set({ phase: "preflight" });
+    return d.runPreflight(video, cam, { noFlashRequested });
+  }
+
   /** Grabber + challenge on the overlay; returns the events. t0 is the challenge start. */
-  private async capture(challenge: Challenge, size: [number, number], mode: OverlayMode): Promise<ChallengeEvent[]> {
+  private async capture(
+    challenge: Challenge, size: [number, number], mode: OverlayMode, noFlash: boolean,
+  ): Promise<ChallengeEvent[]> {
     const d = this.deps;
     const { sessionId, token, video } = this.opts;
     const t0 = d.now();
@@ -229,6 +267,7 @@ export class CaptureSession {
       overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT,
     });
     const shouldSkipLight = () =>
+      (noFlash ? "no_flash" : null) ??
       (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ?? this.opts.shouldSkipLight?.(grabber) ?? null;
     try {
       return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight });

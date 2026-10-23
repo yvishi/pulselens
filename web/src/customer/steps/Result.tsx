@@ -5,7 +5,9 @@ import { resultKey, t, type Lang } from "../strings";
 const MESSAGES: readonly CustomerMessage[] = ["continue", "please_retry", "please_wait", "assisted_route"];
 
 /** The result, from CustomerStatus.message only: never a score, family, check or outcome. */
-export function Result({ lang, message }: { lang: Lang; message: string | undefined }) {
+export function Result({
+  lang, message, agentQuestions,
+}: { lang: Lang; message: string | undefined; agentQuestions?: boolean }) {
   const [asked, setAsked] = useState(false);
   const m: CustomerMessage = MESSAGES.includes(message as CustomerMessage) ? (message as CustomerMessage) : "please_wait";
   return (
@@ -13,6 +15,7 @@ export function Result({ lang, message }: { lang: Lang; message: string | undefi
       <p className="status-text" role="status">
         {t(resultKey(m), lang)}
       </p>
+      {agentQuestions && <p>{t("agent.questions", lang)}</p>}
       {m === "please_retry" &&
         (asked ? (
           <p>{t("result.please_retry.asked", lang)}</p>
