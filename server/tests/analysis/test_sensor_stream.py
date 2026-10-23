@@ -93,3 +93,62 @@ def test_duplicate_runs() -> None:
 def test_analyze_now_runs_the_stream_checks(synth) -> None:
     ids = {r.check_id for r in analyze(synth.session(kind="genuine", turn=None, n_colour=2))}
     assert {"sensor.cadence", "sensor.duplicates"} <= ids
+
+
+def _drop(ctx: AnalysisContext, lo: int, hi: int, *, shift_ms: float = 0.0) -> AnalysisContext:
+    """Removes frames lo..hi-1 (by position) from the frame list and times, as if they never arrived."""
+    keep = np.r_[0:lo, hi:ctx.n]
+    ctx.bundle.frames = [ctx.bundle.frames[i] for i in keep]
+    ctx.t = ctx.t[keep]
+    ctx.t[lo:] += shift_ms
+    return ctx
+
+
+def test_frames_lost_in_upload_are_not_a_stall(genuine_ctx: AnalysisContext) -> None:
+    # Issue #33: idx 88 -> 200, a 3.7 s gap; the browser grabbed those frames but they never arrived.
+    ctx = _drop(genuine_ctx, 89, 200)
+    r = _by_id(run(ctx))["sensor.cadence"]
+    assert r.status == "usable" and not r.flag and r.risk == 0, r.explanation
+    assert "sensor.stall" not in r.reason_codes and "quality.frames_missing" in r.reason_codes
+    assert r.features["frames_missing"] == 111 and r.features["longest_excluded_gap_ms"] > 3000
+    assert r.features["longest_gap_ms"] < 100 and "lost in upload" in r.explanation
+
+
+def test_a_real_stall_with_consecutive_frame_numbers_still_flags(genuine_ctx: AnalysisContext) -> None:
+    ctx = genuine_ctx
+    ctx.t[100:] += 1200  # frame numbers stay consecutive: the source delivered nothing for 1.2 s
+    r = _by_id(run(_drop(ctx, 20, 60)))["sensor.cadence"]
+    assert r.flag and "sensor.stall" in r.reason_codes and r.features["frames_missing"] == 40
+
+
+def test_a_gap_while_the_page_was_hidden_is_not_a_stall(genuine_ctx: AnalysisContext) -> None:
+    ctx = genuine_ctx
+    ch = ctx.bundle.challenge
+    step = ch.steps[2]
+    due = ch.baseline_ms + step.start_offset_ms
+    ev = next(e for e in ctx.bundle.events if e.step_id == step.step_id)
+    ev.status, ev.painted_t_ms, ev.ended_t_ms, ev.shown_rgb, ev.skip_reason = "skipped", None, None, None, "page_hidden"
+    ctx.t[ctx.t > due - 100] += 2000  # no frames for 2 s around the step, numbers consecutive
+    r = _by_id(run(ctx))["sensor.cadence"]
+    assert r.status == "usable" and not r.flag, r.explanation
+    assert "quality.page_hidden" in r.reason_codes and "sensor.stall" not in r.reason_codes
+
+
+def test_a_stall_away_from_the_hidden_page_still_flags(genuine_ctx: AnalysisContext) -> None:
+    ctx = genuine_ctx
+    ch = ctx.bundle.challenge
+    ev = next(e for e in ctx.bundle.events if e.step_id == ch.steps[5].step_id)
+    ev.status, ev.painted_t_ms, ev.ended_t_ms, ev.shown_rgb, ev.skip_reason = "skipped", None, None, None, "page_hidden"
+    ctx.t[30:] += 1500  # early in the baseline, far from the skipped step
+    r = _by_id(run(ctx))["sensor.cadence"]
+    assert r.flag and "sensor.stall" in r.reason_codes
+
+
+def test_cadence_features_leave_excluded_gaps_out() -> None:
+    t = np.arange(40) * 40.0
+    t[20:] += 3000
+    excluded = np.zeros(39, dtype=bool)
+    excluded[19] = True
+    f = cadence_features(t, excluded)
+    assert f["longest_gap_ms"] == pytest.approx(40) and f["longest_excluded_gap_ms"] == pytest.approx(3040)
+    assert f["cv"] == pytest.approx(0) and f["excluded_gaps"] == 1
