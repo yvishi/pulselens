@@ -58,3 +58,14 @@ def test_corrupt_jpeg_reads_as_none(tmp_path: Path) -> None:
                  frames=[(FrameMeta(idx=0, t_ms=0.0, w=8, h=6), b"not a jpeg")], events=[])
     pytest.importorskip("cv2")
     assert load_bundle(tmp_path).read_frame(0) is None
+
+
+def test_empty_jpeg_reads_as_none(tmp_path: Path) -> None:
+    """Issue #5: a 0-byte frame file made cv2.imdecode assert instead of returning None."""
+    pytest.importorskip("cv2")
+    write_bundle(tmp_path, session={}, preflight=None, plan=None, challenge=None,
+                 frames=[(FrameMeta(idx=0, t_ms=0.0, w=8, h=6), b""), (FrameMeta(idx=1, t_ms=33.3, w=8, h=6), _jpeg())],
+                 events=[])
+    b = load_bundle(tmp_path)
+    assert b.read_frame(0) is None
+    assert b.read_frame(1) is not None

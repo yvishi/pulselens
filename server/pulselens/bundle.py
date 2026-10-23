@@ -84,10 +84,15 @@ class Bundle:
             data = self.frame_path(idx).read_bytes()
         except OSError:
             return None
+        if not data:  # cv2.imdecode asserts on an empty buffer instead of returning None
+            return None
         import cv2
         import numpy as np
 
-        img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        try:
+            img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        except cv2.error:
+            return None
         return img if img is not None and img.ndim == 3 else None
 
 
