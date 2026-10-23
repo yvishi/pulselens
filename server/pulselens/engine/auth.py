@@ -27,7 +27,9 @@ def bearer(header: str | None) -> str | None:
     if not header:
         return None
     scheme, _, token = header.partition(" ")
-    return token.strip() or None if scheme.lower() == "bearer" else None
+    if scheme.lower() != "bearer":
+        return None
+    return token.strip() or None
 
 
 def passcode_ok(given: str | None, expected: str) -> bool:
