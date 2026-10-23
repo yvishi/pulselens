@@ -16,6 +16,16 @@ REASON_TEXT: dict[str, str] = {
     "mode.constrained.dim": "The picture is dim, so a simpler, longer challenge runs.",
     "mode.constrained.small_face": "The face is small in the picture, so a simpler, longer challenge runs.",
     "mode.face_not_found": "No face was found before the challenge; the agent should check who is on the call.",
+    # fusion.* (K6): the outcome sentence, first in Decision.reasons.
+    "fusion.integrity_violation": "The session broke the capture protocol, so a person must review it.",
+    "fusion.two_families": "Two independent kinds of evidence raised risk, so a person must review it.",
+    "fusion.one_family": "One kind of evidence raised risk; a further check is needed before deciding.",
+    "fusion.low_coverage": "Too little usable evidence was captured to decide; a further check is needed.",
+    "fusion.pass": "Enough usable evidence was captured and none of it raised risk.",
+    "fusion.step_up.fresh_challenge": "Suggested next step: run a fresh challenge.",
+    "fusion.step_up.no_flash": "Suggested next step: repeat without the flashing light.",
+    "fusion.step_up.agent_checks": "Suggested next step: the agent asks live questions and checks.",
+    "fusion.step_up.assisted_kyc": "Suggested next step: move to assisted KYC (branch or correspondent).",
 }
 
 
