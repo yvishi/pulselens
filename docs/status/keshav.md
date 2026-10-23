@@ -11,7 +11,7 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [x] K6 — fusion and outcomes: `engine/fusion.py::fuse` (CONTRACT §8 exactly: usable-only gate, one vote per vote_group, family states, A reported but never votes, first-match outcome rules, provisional), outcome and step-up sentences in `reason_text.py`. 29 tests: the 13-row outcome table, correlated cues one vote, A never votes, family states, reasons order, provisional, customer message mapping. 2026-10-23.
 - [x] K7 — agent console v1 + v2: `api/agent.py` (CONTRACT §2 rows 9–12 behind X-Agent-Passcode: session list, `/result` SessionReport, frame JPEGs, `/agent` with 409 before a decision); `web/src/console/**`: passcode gate (sessionStorage), session list (2 s poll), session review (1 s poll until decided): header with PROVISIONAL THRESHOLDS / FAKE ANALYSIS labels and plan reasons, outcome banner ("PulseLens recommends; the agent decides."), challenge timeline (requested vs observed, skipped marked), four family cards with raised / could not judge / checked apart and expandable checks (features, uPlot plot), evidence frames, Approve / Re-verify (creates attempt + link) / Escalate. Tests: 6 API, 1 reason-text mirror, 9 vitest, 6 Brave e2e (passcode, decision with FAKE ANALYSIS, no overflow at 1920 and 1366, action survives reload). 2026-10-23.
 - [ ] K8
-- [ ] K9
+- [x] K9 — new session panel on `/console`: product select, no-flash checkbox, customer link as text, QR (canvas 256 px) and copy button. Open the console through the `python scripts/dev.py tunnel` URL so the link and QR point to HTTPS (phones need it for the camera). Tests: 4 vitest, 1 Brave e2e (QR canvas ≥ 240 px, link has `/customer/`). 2026-10-23.
 - [ ] K10
 - [ ] K11
 

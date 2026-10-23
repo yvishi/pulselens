@@ -101,3 +101,13 @@ test("an agent action is recorded and shows after a reload", async ({ page, requ
   await page.reload();
   await expect(page.getByRole("status")).toContainText('Approved: "documents match"');
 });
+
+test("new session shows a QR code and a customer link", async ({ page }) => {
+  await signIn(page, `${WEB}/console`);
+  await page.getByRole("button", { name: "New session" }).click();
+  const section = page.getByRole("region", { name: "New session" });
+  await expect(section.getByRole("link")).toContainText("/customer/");
+  const canvas = section.locator("canvas");
+  await expect(canvas).toBeVisible();
+  expect(await canvas.evaluate((c: HTMLCanvasElement) => c.width)).toBeGreaterThanOrEqual(240);
+});
