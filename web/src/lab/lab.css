@@ -1,0 +1,53 @@
+/* Lab operator screens. The capture screens reuse the customer styles (.customer) unchanged. */
+.lab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lab-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lab-row label {
+  font-weight: 600;
+}
+
+.lab-row input,
+.lab-row select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+.lab-row input:disabled {
+  opacity: 0.5;
+}
+
+.lab-error {
+  color: #c62828;
+  font-size: 0.95rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lab-error {
+    color: #ff8a80;
+  }
+}
+
+.lab-summary {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.lab-session-id {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: min(2rem, 7.5vw);
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.05em;
+}

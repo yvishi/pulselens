@@ -22,6 +22,26 @@ export interface ChallengeDeps {
   shouldSkipLight: () => string | null;
 }
 
+/** The fps-drop downgrade (Y9): below 12 fps over the last 2 s, the remaining colour steps are skipped. */
+export const FPS_DROP_WINDOW_MS = 2000;
+export const FPS_DROP_MIN = 12;
+
+/**
+ * A shouldSkipLight that returns "fps_drop" once the grabber's fps over the last 2 s falls below 12, and keeps
+ * returning it for every remaining colour step (sticky: a recovery mid-challenge does not bring the colours back).
+ * Turn steps never ask, so the turn still runs. No verdict (null) before the grabber has 2 s of frames.
+ */
+export function fpsDropSkip(grabber: { fpsOver(ms: number): number | null }): () => string | null {
+  let dropped = false;
+  return () => {
+    if (!dropped) {
+      const fps = grabber.fpsOver(FPS_DROP_WINDOW_MS);
+      dropped = fps !== null && fps < FPS_DROP_MIN;
+    }
+    return dropped ? "fps_drop" : null;
+  };
+}
+
 /** Saturated red ([345, 360) and [0, 15]) is never shown: photosensitivity. */
 export const isRedHue = (hueDeg: number): boolean => {
   const h = ((hueDeg % 360) + 360) % 360;
