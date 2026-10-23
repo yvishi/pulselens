@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import TypeAdapter, ValidationError
 
 from pulselens.bundle import load_bundle
-from pulselens.contracts import CheckResult, Decision, Label, Mode
+from pulselens.contracts import CheckResult, Decision, Label, Mode, Plan
 
 _RESULTS = TypeAdapter(list[CheckResult])
 
@@ -23,6 +23,8 @@ class EvalSession:
     results: list[CheckResult]
     decision: Decision | None
     completed_at_ms: int | None
+    plan: Plan | None = None  # fusion needs the mode and the attempt to re-fuse (eval/run.py)
+    attempt: int = 1
 
 
 def load_sessions(data_dir: Path, set_: Literal["A", "B"] | None = None) -> list[EvalSession]:
@@ -43,5 +45,6 @@ def load_sessions(data_dir: Path, set_: Literal["A", "B"] | None = None) -> list
             continue
         sessions.append(EvalSession(
             session_id=path.name, label=bundle.label, mode=bundle.plan.mode if bundle.plan else None,
-            results=results, decision=decision, completed_at_ms=bundle.session.get("completed_at_ms")))
+            results=results, decision=decision, completed_at_ms=bundle.session.get("completed_at_ms"),
+            plan=bundle.plan, attempt=int(bundle.session.get("attempt", 1))))
     return sessions

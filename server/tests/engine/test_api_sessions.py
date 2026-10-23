@@ -209,6 +209,16 @@ def test_frames_after_complete(client: TestClient, tmp_path: Path) -> None:
     assert session["after_complete_attempts"] == 2  # recorded for integrity.after_complete (K5)
 
 
+def test_complete_records_completed_at_ms(client: TestClient, tmp_path: Path, clock: Clock) -> None:
+    s = create(client)
+    ready(client, s)
+    clock.ms += 1234
+    assert client.post(f"/api/sessions/{s['session_id']}/complete", headers=auth(s)).status_code == 202
+    session = json.loads((tmp_path / "data" / s["session_id"] / "session.json").read_text())
+    assert isinstance(session["completed_at_ms"], int)
+    assert session["completed_at_ms"] == int(clock.ms)  # the store's clock, for eval latency (K10b)
+
+
 def rows(tmp_path: Path, s: dict) -> list[dict]:
     text = (tmp_path / "data" / s["session_id"] / "frames.jsonl").read_text()
     return [json.loads(line) for line in text.splitlines()]
