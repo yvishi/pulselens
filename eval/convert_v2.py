@@ -78,6 +78,68 @@ def _platform(os_name: str) -> str:
     return "android" if "android" in low else "ios" if "ios" in low or "iphone" in low else "desktop"
 
 
+def _steps_and_events(pulses: list[dict[str, Any]], t0: float) -> tuple[int, list[ColourStep], list[ChallengeEvent]]:
+    """Painted colour pulses → (baseline_ms, steps, events). Times become ms since the first frame; steps start
+    after the baseline (the first painted colour). A pulse that was never painted keeps its place 1 s after the
+    previous step: the old prototype logged no time for it, and integrity only needs the order."""
+    painted = [p["painted"] for p in pulses if p.get("painted") is not None]
+    baseline = int(round(min(painted) - t0)) if painted else 0
+    steps: list[ColourStep] = []
+    events: list[ChallengeEvent] = []
+    for k, p in enumerate(pulses):
+        step_id, at = f"c{k}", p.get("painted")
+        if at is not None:
+            start = int(round(at - t0)) - baseline
+        else:
+            start = steps[-1].start_offset_ms + 1000 if steps else 0
+        steps.append(ColourStep(step_id=step_id, hue_deg=int(round(p["params"].get("hue_deg") or 0)),
+                                start_offset_ms=start, dwell_ms=int(p["params"].get("duration_ms", 400))))
+        rgb = (p.get("shown") or {}).get("rgb")
+        if p.get("ok") and at is not None:
+            ended = p.get("ended")
+            events.append(ChallengeEvent(step_id=step_id, status="shown", painted_t_ms=at - t0,
+                                         ended_t_ms=ended - t0 if ended is not None else None,
+                                         shown_rgb=tuple(c / 255 for c in rgb) if rgb else None))
+        else:
+            events.append(ChallengeEvent(step_id=step_id, status="skipped", painted_t_ms=None, ended_t_ms=None,
+                                         shown_rgb=None, skip_reason=p.get("error") or "not_painted"))
+    return baseline, sorted(steps, key=lambda st: st.start_offset_ms), events
+
+
+def _plan_and_challenge(sid: str, fps: float, baseline: int, steps: list[ColourStep]) -> tuple[Plan, Challenge]:
+    """What actually ran: the light if any colour was painted, never a turn (the old prototype had none)."""
+    mode = "CAPABLE" if fps >= 20 else "CONSTRAINED"
+    plan = Plan(mode=mode, run_light=bool(steps), run_turn=False, agent_questions=False,
+                reasons=["mode.capable.ok" if mode == "CAPABLE" else "mode.constrained.fps"])
+    end = max((st.start_offset_ms + st.dwell_ms for st in steps), default=0)
+    return plan, Challenge(session_id=sid, nonce=NONCE, mode=mode, baseline_ms=baseline, steps=steps,
+                           total_ms=end + 500)
+
+
+def _preflight(cd: dict[str, Any], fin: dict[str, Any], first_frame: dict[str, Any],
+               probe_rows: list[dict[str, Any]]) -> Preflight:
+    settings = cd.get("settings") or {}
+    return Preflight(
+        user_agent=str(cd.get("browser", "")), platform=_platform(str(cd.get("os", ""))),
+        browser=str(cd.get("browser", "")), camera_label=str(cd.get("camera_label", "")),
+        width=int(settings.get("width", first_frame["w"])), height=int(settings.get("height", first_frame["h"])),
+        measured_fps=float(cd.get("fps_median") or 0.0),
+        dropped_frame_ratio=float(fin.get("dropped", 0)) / max(1, int(fin.get("frames", 1))),
+        blur=0.0, brightness=0.0, face_found=True, face_fraction=0.0, controls=sorted(cd.get("capabilities") or {}),
+        gyro=cd.get("gyro") in ("available", "granted"), no_flash_requested=False,
+        clock=CLOCK.get(str(cd.get("clock_source")), "now"), probe=_probe(probe_rows),
+    )
+
+
+def _session(meta: dict[str, Any]) -> dict[str, Any]:
+    created = int(meta.get("created_ms", 0))
+    label = _label(meta.get("label"))
+    return {"session_id": meta["session_id"], "nonce": NONCE, "product": "savings_account", "no_flash": False,
+            "attempt": 1, "previous_session_id": None, "created_at_ms": created,
+            "expires_at_ms": created + 15 * 60_000, "state": "analysing",
+            "label": label.model_dump() if label else None, "converted_from": "v2"}
+
+
 def convert(src: Path, dst: Path) -> Path | None:
     """One old bundle → one new bundle at dst/<session id>. None when the old session never finished."""
     meta = json.loads((src / "meta.json").read_text(encoding="utf-8"))
@@ -85,53 +147,13 @@ def convert(src: Path, dst: Path) -> Path | None:
     frame_rows = sorted(_jsonl(src / "frames.jsonl"), key=lambda r: r.get("i", -1))
     if not fin or not frame_rows:
         return None
-    sid = meta["session_id"]
-    cd = meta.get("camera_details") or {}
+    sid, cd = meta["session_id"], meta.get("camera_details") or {}
     t0 = float(frame_rows[0]["t"])
-
-    pulses = [p for p in _jsonl(src / "pulses.jsonl") if (p.get("params") or {}).get("mode") == "colour"]
-    shown = [p for p in pulses if p.get("painted") is not None]
-    baseline = int(round(min(p["painted"] for p in shown) - t0)) if shown else 0
-    steps, events = [], []
-    for k, p in enumerate(pulses):
-        step_id = f"c{k}"
-        duration = int((p.get("params") or {}).get("duration_ms", 400))
-        painted = p.get("painted")
-        start = int(round(painted - t0)) - baseline if painted is not None else (steps[-1].start_offset_ms + 1000
-                                                                                if steps else 0)
-        steps.append(ColourStep(step_id=step_id, hue_deg=int(round(p["params"].get("hue_deg") or 0)),
-                                start_offset_ms=start, dwell_ms=duration))
-        rgb = ((p.get("shown") or {}).get("rgb"))
-        if p.get("ok") and painted is not None:
-            events.append(ChallengeEvent(step_id=step_id, status="shown", painted_t_ms=painted - t0,
-                                         ended_t_ms=(p["ended"] - t0) if p.get("ended") is not None else None,
-                                         shown_rgb=tuple(c / 255 for c in rgb) if rgb else None))
-        else:
-            events.append(ChallengeEvent(step_id=step_id, status="skipped", painted_t_ms=None, ended_t_ms=None,
-                                         shown_rgb=None, skip_reason=p.get("error") or "not_painted"))
-    steps.sort(key=lambda s: s.start_offset_ms)
-    end = max((s.start_offset_ms + s.dwell_ms for s in steps), default=0)
-    fps = float(cd.get("fps_median") or 0.0)
-    mode = "CAPABLE" if fps >= 20 else "CONSTRAINED"
-    plan = Plan(mode=mode, run_light=bool(steps), run_turn=False, agent_questions=False,
-                reasons=["mode.capable.ok" if mode == "CAPABLE" else "mode.constrained.fps"])
-    challenge = Challenge(session_id=sid, nonce=NONCE, mode=mode, baseline_ms=baseline, steps=steps, total_ms=end + 500)
-    settings = cd.get("settings") or {}
-    preflight = Preflight(
-        user_agent=str(cd.get("browser", "")), platform=_platform(str(cd.get("os", ""))),
-        browser=str(cd.get("browser", "")), camera_label=str(cd.get("camera_label", "")),
-        width=int(settings.get("width", frame_rows[0]["w"])), height=int(settings.get("height", frame_rows[0]["h"])),
-        measured_fps=fps, dropped_frame_ratio=float(fin.get("dropped", 0)) / max(1, int(fin.get("frames", 1))),
-        blur=0.0, brightness=0.0, face_found=True, face_fraction=0.0, controls=sorted(cd.get("capabilities") or {}),
-        gyro=cd.get("gyro") in ("available", "granted"), no_flash_requested=False,
-        clock=CLOCK.get(str(cd.get("clock_source")), "now"), probe=_probe(_jsonl(src / "probe.jsonl")),
-    )
-    created = int(meta.get("created_ms", 0))
-    label = _label(meta.get("label"))
-    session = {"session_id": sid, "nonce": NONCE, "product": "savings_account", "no_flash": False, "attempt": 1,
-               "previous_session_id": None, "created_at_ms": created, "expires_at_ms": created + 15 * 60_000,
-               "state": "analysing", "label": label.model_dump() if label else None, "converted_from": "v2"}
-
+    colour = [p for p in _jsonl(src / "pulses.jsonl") if (p.get("params") or {}).get("mode") == "colour"]
+    baseline, steps, events = _steps_and_events(colour, t0)
+    preflight = _preflight(cd, fin, frame_rows[0], _jsonl(src / "probe.jsonl"))
+    plan, challenge = _plan_and_challenge(sid, preflight.measured_fps, baseline, steps)
+    session = _session(meta)
     frames = []
     for r in frame_rows:
         jpeg = src / "frames" / str(r.get("file", frame_name(int(r["i"]))))
@@ -143,8 +165,10 @@ def convert(src: Path, dst: Path) -> Path | None:
         shutil.rmtree(out)
     write_bundle(out, session=session, preflight=preflight, plan=plan, challenge=challenge, frames=frames,
                  events=events)
-    batch = 30  # the old uploader's batches were time-based; integrity only needs a batch number per frame
-    rows = [{**m.model_dump(), "batch_seq": i // batch, "received_at_ms": created} for i, (m, _) in enumerate(frames)]
+    # write_bundle writes FrameMeta only; the engine's lines also carry a batch number (the old uploader's batches
+    # were time-based, so 30 frames a batch stands in), which integrity needs.
+    rows = [{**m.model_dump(), "batch_seq": i // 30, "received_at_ms": session["created_at_ms"]}
+            for i, (m, _) in enumerate(frames)]
     (out / "frames.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     return out
 

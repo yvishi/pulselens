@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from eval.convert_v2 import convert
+from eval.convert_v2 import _plan_and_challenge, _session, _steps_and_events, convert
 from pulselens.bundle import load_bundle
 
 JPEG = b"\xff\xd8\xff\xd9"
@@ -71,3 +71,32 @@ def test_genuine_label_has_no_tool(tmp_path: Path) -> None:
 
 def test_unfinished_session_is_skipped(tmp_path: Path) -> None:
     assert convert(old_bundle(tmp_path / "old", finished=False), tmp_path / "new") is None
+
+
+def _pulse(hue: float, painted: float | None, ok: bool = True) -> dict:
+    return {"params": {"mode": "colour", "hue_deg": hue, "duration_ms": 600}, "painted": painted,
+            "ended": None if painted is None else painted + 600, "ok": ok, "shown": {"rgb": [255, 0, 0]}}
+
+
+def test_steps_start_after_the_baseline_and_an_unpainted_pulse_keeps_its_place() -> None:
+    baseline, steps, events = _steps_and_events([_pulse(60, 1500), _pulse(180, None, ok=False), _pulse(300, 4000)],
+                                                t0=500)
+    assert baseline == 1000  # first painted colour, ms since the first frame
+    assert [(st.step_id, st.start_offset_ms) for st in steps] == [("c0", 0), ("c1", 1000), ("c2", 2500)]
+    assert [(e.step_id, e.status, e.painted_t_ms) for e in events] == [
+        ("c0", "shown", 1000), ("c1", "skipped", None), ("c2", "shown", 3500)]
+    assert events[1].skip_reason == "not_painted" and events[0].shown_rgb == (1.0, 0.0, 0.0)
+
+
+def test_mode_follows_the_measured_fps_and_never_runs_a_turn() -> None:
+    _, steps, _ = _steps_and_events([_pulse(60, 1000)], t0=0)
+    plan, ch = _plan_and_challenge("s", 20.0, 1000, steps)
+    assert (plan.mode, plan.run_light, plan.run_turn) == ("CAPABLE", True, False)
+    assert ch.total_ms == 600 + 500
+    assert _plan_and_challenge("s", 19.9, 0, [])[0].mode == "CONSTRAINED"
+    assert not _plan_and_challenge("s", 30.0, 0, [])[0].run_light  # nothing painted: no light ran
+
+
+def test_session_marks_the_conversion() -> None:
+    s = _session({"session_id": "x", "created_ms": 1000, "label": None})
+    assert s["converted_from"] == "v2" and s["expires_at_ms"] == 1000 + 15 * 60_000 and s["label"] is None
