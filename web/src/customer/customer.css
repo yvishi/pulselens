@@ -81,3 +81,30 @@
 .customer video.selfview-off {
   display: none;
 }
+
+/* EN/HI toggle on the consent screen: two small buttons side by side. */
+.customer .lang-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.customer .lang-toggle button {
+  width: auto;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.customer .lang-toggle button[aria-pressed="true"] {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+
+/* Coaching tips: at most 2, large and plain. */
+.customer .tips {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}

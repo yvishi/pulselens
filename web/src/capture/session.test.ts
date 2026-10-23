@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import type { Challenge, ChallengeEvent, CustomerStatus, Plan, Preflight } from "../contracts";
+import type { CoachMetrics } from "./coaching";
 import type { GrabberOptions } from "./grabber";
 import { CaptureSession, type CaptureSessionDeps, type CaptureState } from "./session";
 
@@ -16,6 +17,11 @@ const EVENTS: ChallengeEvent[] = [
   { step_id: "c0", status: "shown", painted_t_ms: 1510, ended_t_ms: 1920, shown_rgb: [0.5, 0.5, 0.4], skip_reason: null },
   { step_id: "t0", status: "shown", painted_t_ms: 2510, ended_t_ms: 5520, shown_rgb: null, skip_reason: null },
 ];
+
+const GOOD: CoachMetrics = {
+  brightness: 120, faceLuma: 120, outsideLuma: 110, faceFraction: 0.1, faceBottom: 0.5, blur: 100, blurBaseline: 100,
+};
+const DARK: CoachMetrics = { ...GOOD, brightness: 20, faceLuma: 20, outsideLuma: 20 };
 
 /** Every dependency stubbed; each call is logged by name, in order. */
 function stubs(over: Partial<CaptureSessionDeps> = {}) {
@@ -77,6 +83,7 @@ function stubs(over: Partial<CaptureSessionDeps> = {}) {
       expect(d.shouldSkipLight()).toBeNull();
       return EVENTS;
     }),
+    createCoachMeter: vi.fn(() => ({ measure: vi.fn(async () => GOOD) })),
     now: () => 1234,
     sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
     ...over,
@@ -193,5 +200,67 @@ describe("CaptureSession", () => {
     await vi.runAllTimersAsync();
     await done;
     expect(reason).toBe("page_hidden");
+  });
+
+  it("no tips: no coaching screen and a single preflight", async () => {
+    const st = stubs();
+    const { s, phases } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(phases()).not.toContain("coaching");
+    expect(st.deps.runPreflight).toHaveBeenCalledTimes(1);
+  });
+
+  it("coaches up to 3 rounds, then continues anyway with a fresh preflight", async () => {
+    const measure = vi.fn(async () => DARK);
+    const st = stubs({ createCoachMeter: vi.fn(() => ({ measure })) });
+    const { s, states, phases } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(phases().slice(0, 7)).toEqual(["camera", "preflight", "coaching", "coaching", "coaching", "preflight", "challenge"]);
+    expect(states.filter((x) => x.phase === "coaching").map((x) => x.tips)).toEqual([["light"], ["light"], ["light"]]);
+    expect(measure).toHaveBeenCalledTimes(4); // with the preflight, then once per round
+    expect(measure.mock.calls.slice(1).map((c) => (c as unknown[])[0])).toEqual([3000, 3000, 3000]);
+    expect(st.deps.runPreflight).toHaveBeenCalledTimes(2);
+    expect(phases().at(-1)).toBe("result");
+  });
+
+  it("stops coaching as soon as the tips clear", async () => {
+    const results = [DARK, GOOD];
+    const st = stubs({ createCoachMeter: vi.fn(() => ({ measure: vi.fn(async () => results.shift() ?? GOOD) })) });
+    const { s, phases } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(phases().slice(0, 5)).toEqual(["camera", "preflight", "coaching", "preflight", "challenge"]);
+  });
+
+  it("a NO_FLASH plan skips every colour step and asks the agent's questions", async () => {
+    let reason: string | null = "unset";
+    const st = stubs({
+      runChallenge: vi.fn(async (_ch, d) => {
+        reason = d.shouldSkipLight();
+        return EVENTS;
+      }),
+    });
+    st.deps.api.postPreflight = vi.fn(async () => ({
+      mode: "NO_FLASH" as const, run_light: false, run_turn: true, agent_questions: true, reasons: ["mode.no_flash.requested"],
+    }));
+    const { s, states } = session(st.deps);
+    const done = s.start(true);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(reason).toBe("no_flash");
+    expect(states.at(-1)).toMatchObject({ phase: "result", agentQuestions: true });
   });
 });
