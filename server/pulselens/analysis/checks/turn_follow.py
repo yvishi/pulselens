@@ -4,12 +4,16 @@ Window: the turn step's painted time to ended + 500 ms. yaw0 = the median yaw ov
 Signed excursion e(t) = (yaw - yaw0) x (+1 for "left", -1 for "right"); positive yaw is the person's own left
 (CONTRACT section 1), so e > 0 means "towards the requested side".
 
-Outcomes, first match wins:
-1. the face is missing for more than 40% of the window: usable, risk 0.6, `turn.face_lost` (a hypothesis: swaps can
-   drop the face at large angles; one family flagging leads to a retry, not to a human review);
-2. turned the wrong way (wrong peak >= 15 degrees, requested peak < 10): usable, risk 1, `turn.wrong_direction`;
-3. turned the right way (peak >= 15): usable, risk 0; `turn.no_return` when it did not come back within 10 degrees
+A turn window that is too dark or clipped abstains (unable to judge): the landmarks, and so the yaw, are not
+trustworthy there, and poor capture is never attack evidence.
+
+Outcomes, first match wins. The turn itself is judged first, from the frames where the face was seen, so a face that
+drops out for part of a turn that was clearly followed is not held against the person:
+1. turned the wrong way (wrong peak >= 15 degrees, requested peak < 10): usable, risk 1, `turn.wrong_direction`;
+2. turned the right way (peak >= 15): usable, risk 0; `turn.no_return` when it did not come back within 10 degrees
    by the end (noted, not scored: a person may be slow to turn back);
+3. the face is missing for more than 40% of the window: usable, risk 0.6, `turn.face_lost` (a hypothesis: swaps can
+   drop the face at large angles; one family flagging leads to a retry, not to a human review);
 4. otherwise the turn was not performed (or only partly): abstain `turn.not_performed`, because a genuine person may
    simply not have turned, and fusion's coverage rule handles a missing family.
 A start under 150 ms after the prompt adds `turn.too_fast`, measured, not scored, until data says otherwise.
@@ -21,11 +25,13 @@ import numpy as np
 
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
+from pulselens.analysis.reason_text import text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.contracts import CheckResult, Plot, TurnStep
 
 SPEC = specs.TURN_FOLLOW
 MAX_PLOT_POINTS = 300
+UNSEEN = ("quality.too_dark", "quality.clipped")  # turn-window quality reasons that make the yaw untrustworthy
 
 
 def _plot(t: np.ndarray, yaw: np.ndarray, painted: float, ended: float) -> Plot:
@@ -73,6 +79,13 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     if window is not None and "quality.low_fps" in window.reasons:
         return [abstain(*ids, ["quality.low_fps"], f"The camera delivered {window.fps:.1f} fps during the turn, too "
                         "few to follow the head.", features={"fps": window.fps}, window_id=step.step_id)]
+    unseen = [r for r in UNSEEN if window is not None and r in window.reasons]
+    if unseen:
+        why = " and ".join(text(r).rstrip(".").lower() for r in unseen)
+        return [abstain(*ids, unseen, f"Unable to judge the turn: {why}, so the head angle cannot be trusted.",
+                        quality=window.luma_ok * (1 - window.saturated),
+                        features={"luma_ok": window.luma_ok, "saturated": window.saturated},
+                        window_id=step.step_id)]
 
     t, yaw = ctx.t, ctx.yaw
     before = (t >= painted - float(p.get("baseline_ms", 500))) & (t < painted) & np.isfinite(yaw)
@@ -106,11 +119,6 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [result(*ids, risk=risk, flag_at=flag_at, quality=face_present, features=features, reasons=reasons,
                        explanation=explanation, source=source, window_id=step.step_id, plot=plot, voting=voting)]
 
-    max_lost = float(p.get("max_face_lost", 0.4))
-    if 1 - face_present > max_lost:
-        return usable(float(p.get("face_lost_risk", 0.6)), ["turn.face_lost"],
-                      f"The face was lost for {1 - face_present:.0%} of the turn (more than {max_lost:.0%}); a "
-                      "hypothesis: a swapped face can drop out at large angles.")
     min_peak = float(p.get("min_peak_deg", 15))
     if wrong >= min_peak and peak < still:
         return usable(1.0, ["turn.wrong_direction"],
@@ -125,6 +133,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                           "degrees away at the end (noted, not scored).")
         back = f" and came back within {ret:.0f} degrees" if ret is not None else ""
         return usable(0.0, [], f"The head turned {peak:.0f} degrees {asked}{lat} as asked{back}.")
+    max_lost = float(p.get("max_face_lost", 0.4))
+    if 1 - face_present > max_lost:
+        return usable(float(p.get("face_lost_risk", 0.6)), ["turn.face_lost"],
+                      f"The face was lost for {1 - face_present:.0%} of the turn (more than {max_lost:.0%}); a "
+                      "hypothesis: a swapped face can drop out at large angles.")
     if face_present < float(ctx.thresholds.params("quality").get("min_face_present", 0.8)):
         return [abstain(*ids, ["quality.no_face"], f"The face was visible in {face_present:.0%} of the turn and "
                         f"moved at most {max(peak, wrong):.0f} degrees.", quality=face_present, features=features,

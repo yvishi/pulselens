@@ -3,6 +3,7 @@ import pytest
 
 from pulselens.analysis import analyze
 from pulselens.analysis.checks import turn_follow
+from pulselens.analysis.quality import assess
 
 
 def _one(ctx):
@@ -44,10 +45,44 @@ def test_no_turn_step_is_not_run(synth) -> None:
 
 
 def test_a_face_lost_for_most_of_the_turn_is_a_hypothesis_flag(synth) -> None:
-    r = _one(synth.context(kind="genuine", n_colour=0, turn="left", face_lost_in_turn=0.6))
+    # 80% lost around the middle: the frames left show no turn either way, so the turn cannot be judged.
+    r = _one(synth.context(kind="genuine", n_colour=0, turn="left", face_lost_in_turn=0.8))
     assert r.status == "usable" and r.risk == pytest.approx(0.6) and r.flag
     assert "turn.face_lost" in r.reason_codes and r.features["face_present"] < 0.6
     assert "hypothesis" in r.explanation
+
+
+def test_the_turn_is_judged_before_the_face_loss(synth) -> None:
+    # 60% lost, but the frames left show the full turn: followed, not face_lost.
+    r = _one(synth.context(kind="genuine", n_colour=0, turn="left", face_lost_in_turn=0.6))
+    assert r.status == "usable" and not r.flag and r.risk == 0, r.explanation
+    assert "turn.face_lost" not in r.reason_codes and r.features["peak_deg"] >= 15
+
+
+def test_a_wrong_turn_with_face_loss_is_still_the_wrong_direction(synth) -> None:
+    r = _one(synth.context(kind="genuine", n_colour=0, turn="right", turn_performed="left", face_lost_in_turn=0.6))
+    assert r.flag and r.risk == 1.0 and r.reason_codes == ["turn.wrong_direction"]
+
+
+def _requality(ctx, skin_in_turn: float):
+    """Sets the face's linear colour in the turn window to `skin_in_turn` and reruns the quality gate."""
+    ev = next(e for e in ctx.bundle.events if e.step_id == "t0")
+    in_turn = (ctx.t >= ev.painted_t_ms) & (ctx.t <= ev.ended_t_ms + 500)
+    ctx.regions["skin"].rgb_linear[in_turn] = skin_in_turn
+    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.frame_w, ctx.bundle.events, ctx.bundle.challenge,
+                         thresholds=ctx.thresholds)
+    return ctx
+
+
+@pytest.mark.parametrize(("skin", "reason"), [(0.005, "quality.too_dark"), (0.99, "quality.clipped")])
+def test_a_dark_or_clipped_turn_window_is_unable_to_judge(synth, skin: float, reason: str) -> None:
+    # Even a wrong-way turn: the yaw of an unlit or blown-out face is not evidence.
+    ctx = _requality(synth.context(kind="genuine", n_colour=0, turn="right", turn_performed="left"), skin)
+    assert reason in ctx.quality.windows["t0"].reasons
+    r = _one(ctx)
+    assert r.status == "abstain" and not r.flag and r.risk is None
+    assert reason in r.reason_codes and "turn.wrong_direction" not in r.reason_codes
+    assert r.explanation.startswith("Unable to judge the turn")
 
 
 def test_a_short_face_loss_is_fine(synth) -> None:
