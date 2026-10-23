@@ -11,6 +11,7 @@ from statistics import median
 from pulselens.bundle import Bundle
 from pulselens.contracts import CheckResult, ColourStep
 from pulselens.engine.reason_text import reason_text
+from pulselens.engine.results import abstain, protocol_error, usable
 
 MIN_FRAMES = 50
 FLAG_AT = 0.2  # share of missing upload batches
@@ -45,16 +46,9 @@ def _protocol(bundle: Bundle) -> CheckResult:
         codes.append("integrity.after_complete")
 
     if codes:
-        return CheckResult(
-            check_id="integrity.protocol", family="B", vote_group="B.protocol", status="protocol_error", risk=None,
-            flag=False, quality=1.0, reason_codes=codes, explanation=" ".join(reason_text(c) for c in codes),
-            window_id="all", threshold_source="rule",
-        )
-    return CheckResult(
-        check_id="integrity.protocol", family="B", vote_group="B.protocol", status="usable", risk=0.0, flag=False,
-        quality=1.0, explanation=f"Frames, events and the challenge follow the protocol ({len(bundle.frames)} frames, "
-        f"{len(bundle.events)} challenge events).", window_id="all", threshold_source="rule",
-    )
+        return protocol_error("integrity.protocol", " ".join(reason_text(c) for c in codes), codes)
+    return usable("integrity.protocol", f"Frames, events and the challenge follow the protocol "
+                  f"({len(bundle.frames)} frames, {len(bundle.events)} challenge events).")
 
 
 def _frames_per_step(bundle: Bundle) -> float | None:
@@ -80,22 +74,14 @@ def _coverage(bundle: Bundle) -> CheckResult:
     if per_step is not None:
         features["frames_per_step_window"] = per_step
     if n < MIN_FRAMES:
-        return CheckResult(
-            check_id="integrity.coverage", family="B", vote_group="B.protocol", status="abstain", risk=None,
-            flag=False, quality=n / MIN_FRAMES, features=features, reason_codes=["integrity.too_few_frames"],
-            explanation=f"Only {n} frames arrived (need {MIN_FRAMES}) to judge the upload.", window_id="all",
-            threshold_source="rule",
-        )
+        return abstain("integrity.coverage", f"Only {n} frames arrived (need {MIN_FRAMES}) to judge the upload.",
+                       ["integrity.too_few_frames"], quality=n / MIN_FRAMES, features=features)
     risk = min(1.0, missing / total_batches) if total_batches else 0.0
     flag = risk >= FLAG_AT
     gaps = f"{missing} of {total_batches} upload batches missing" if missing else f"all {total_batches} upload batches"
     per = f", median {per_step:.0f} frames per challenge step" if per_step is not None else ""
-    return CheckResult(
-        check_id="integrity.coverage", family="B", vote_group="B.protocol", status="usable", risk=risk, flag=flag,
-        quality=1.0, features=features, reason_codes=["integrity.batch_gaps"] if flag else [],
-        explanation=f"{n} frames over {span / 1000:.1f} s arrived, {gaps}{per}.", window_id="all",
-        threshold_source="rule",
-    )
+    return usable("integrity.coverage", f"{n} frames over {span / 1000:.1f} s arrived, {gaps}{per}.", risk=risk,
+                  flag=flag, features=features, reason_codes=["integrity.batch_gaps"] if flag else [])
 
 
 def check_integrity(bundle: Bundle) -> list[CheckResult]:
