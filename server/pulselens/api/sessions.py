@@ -28,7 +28,7 @@ from pulselens.contracts import (
 from pulselens.engine.auth import bearer
 from pulselens.engine.fusion import customer_message
 from pulselens.engine.planner import make_challenge, plan_session, rng_for_nonce
-from pulselens.engine.store import FINISHED
+from pulselens.engine.store import FINISHED, FrameCapExceeded
 
 router = APIRouter(prefix="/api")
 EVENTS = TypeAdapter(list[ChallengeEvent])
@@ -91,12 +91,7 @@ def challenge(request: Request, session_id: str, authorization: Auth = None) -> 
     return issued
 
 
-@router.post("/sessions/{session_id}/frames", status_code=204)
-async def frames(request: Request, session_id: str, authorization: Auth = None) -> Response:
-    session = _customer(request, session_id, authorization)
-    _refuse_after_complete(request, session)
-    limits = request.app.state.config["session"]
-    store = _store(request)
+async def _read_batch(request: Request, limits: dict[str, Any]) -> tuple[FrameBatchMeta, list[bytes]]:
     async with request.form(max_files=1000, max_fields=10) as form:
         try:
             meta = FrameBatchMeta.model_validate(json.loads(str(form.get("meta") or "")))
@@ -104,8 +99,6 @@ async def frames(request: Request, session_id: str, authorization: Auth = None) 
             raise HTTPException(422, "bad_frame_meta") from None
         if len(meta.frames) > limits["max_batch_frames"]:
             raise HTTPException(413, "too_many_frames_in_batch")
-        if store.frame_count(session_id) + len(meta.frames) > limits["max_frames"]:
-            raise HTTPException(413, "too_many_frames_in_session")
         jpegs = []
         for frame in meta.frames:
             part = form.get(f"f{frame.idx}")
@@ -115,7 +108,30 @@ async def frames(request: Request, session_id: str, authorization: Auth = None) 
             if len(data) > limits["max_jpeg_kb"] * 1024:
                 raise HTTPException(413, "jpeg_too_large")
             jpegs.append(data)
-    store.append_frames(session_id, meta, jpegs)
+    return meta, jpegs
+
+
+@router.post("/sessions/{session_id}/frames", status_code=204)
+async def frames(request: Request, session_id: str, authorization: Auth = None) -> Response:
+    session = _customer(request, session_id, authorization)
+    limits = request.app.state.config["session"]
+    store = _store(request)
+    if session["state"] in FINISHED:
+        # Still 409, but an exact re-send of a stored batch (a retry whose response was lost) is a network
+        # artefact, not a late frame, so it does not count toward integrity.after_complete (AGENTS.md rule 3).
+        try:
+            meta, jpegs = await _read_batch(request, limits)
+        except HTTPException:
+            meta, jpegs = None, []
+        with store.lock(session_id):
+            if meta is None or not store.is_resend(session_id, meta, jpegs):
+                store.increment(session_id, "after_complete_attempts")
+        raise HTTPException(409, "session_complete")
+    meta, jpegs = await _read_batch(request, limits)
+    try:
+        store.append_frames(session_id, meta, jpegs, max_frames=limits["max_frames"])
+    except FrameCapExceeded:
+        raise HTTPException(413, "too_many_frames_in_session") from None
     return Response(status_code=204)
 
 

@@ -12,11 +12,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from pulselens.bundle import frame_name
+from pulselens.bundle import _read_jsonl, frame_name
 from pulselens.contracts import (
     ChallengeEvent,
     Decision,
     FrameBatchMeta,
+    FrameMeta,
     Mode,
     Plan,
     SessionCreate,
@@ -32,6 +33,10 @@ FINISHED: tuple[SessionState, ...] = ("analysing", "done")  # past /complete: ne
 
 def _wall_ms() -> float:
     return time.time() * 1000
+
+
+class FrameCapExceeded(Exception):
+    """The batch would take frames.jsonl past the session's frame cap (docs/CONTRACT.md section 2, 413)."""
 
 
 class SessionStore:
@@ -156,12 +161,40 @@ class SessionStore:
     def frame_count(self, session_id: str) -> int:
         return len(list((self.path(session_id) / "frames").glob("*.jpg")))
 
-    def append_frames(self, session_id: str, meta: FrameBatchMeta, jpegs: list[bytes]) -> None:
+    def is_resend(self, session_id: str, meta: FrameBatchMeta, jpegs: list[bytes]) -> bool:
+        """True when every frame of this batch is already stored under the same batch_seq with the same FrameMeta
+        and the same JPEG bytes: the uploader re-sent a batch whose response was lost on the network (Y4 retries).
+        A repeated idx that differs in any way is not a re-send; integrity (K5) must see it."""
+        folder = self.path(session_id)
+        with self.lock(session_id):
+            rows, _ = _read_jsonl(folder / "frames.jsonl")
+            stored = {
+                (r.get("batch_seq"), r.get("idx")): {k: r.get(k) for k in FrameMeta.model_fields} for r in rows
+            }
+            for frame, jpeg in zip(meta.frames, jpegs, strict=True):
+                if stored.get((meta.batch_seq, frame.idx)) != frame.model_dump():
+                    return False
+                target = folder / "frames" / frame_name(frame.idx)
+                if not target.exists() or target.read_bytes() != jpeg:
+                    return False
+            return True
+
+    def append_frames(
+        self, session_id: str, meta: FrameBatchMeta, jpegs: list[bytes], *, max_frames: int | None = None
+    ) -> bool:
         """JPEGs exactly as uploaded, plus one frames.jsonl line each with batch_seq and received_at_ms.
-        A repeated idx keeps the first JPEG; its meta line is still appended, so integrity (K5) can see it."""
+        An exact re-send (is_resend) writes nothing and returns False. Any other repeated idx keeps the first JPEG
+        and its meta line is still appended, so integrity (K5) can see it. max_frames caps frames.jsonl rows (not
+        JPEG files), so altered re-sends cannot grow it without bound; raises FrameCapExceeded."""
         folder = self.path(session_id)
         received = int(self.clock())
         with self.lock(session_id):
+            if self.is_resend(session_id, meta, jpegs):
+                return False
+            if max_frames is not None:
+                rows, bad = _read_jsonl(folder / "frames.jsonl")
+                if len(rows) + bad + len(meta.frames) > max_frames:
+                    raise FrameCapExceeded(session_id)
             lines = []
             for frame, jpeg in zip(meta.frames, jpegs, strict=True):
                 target = folder / "frames" / frame_name(frame.idx)
@@ -170,6 +203,7 @@ class SessionStore:
                 lines.append({**frame.model_dump(), "batch_seq": meta.batch_seq, "received_at_ms": received})
             with (folder / "frames.jsonl").open("a", encoding="utf-8") as f:
                 f.writelines(json.dumps(line) + "\n" for line in lines)
+            return True
 
     def append_events(self, session_id: str, events: list[ChallengeEvent]) -> None:
         with self.lock(session_id), (self.path(session_id) / "events.jsonl").open("a", encoding="utf-8") as f:
