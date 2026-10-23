@@ -34,7 +34,9 @@ light.face_neck:
 
 light.background:
   flag_at: 0.5
-  max_bg_ratio: 0.8
+  max_bg_ratio: 0.8          # background colour change / face colour change; risk = 0.5 x ratio / this
+  min_steps: 3               # steps with a clear face echo
+  min_coverage: 0.2          # share of the frame left as background
 
 sensor.cadence:
   flag_at: 0.6

@@ -13,7 +13,6 @@ from pulselens.analysis.quality import QualityReport, assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
 from pulselens.analysis.vision.frames import REGION_NAMES, dhash, region_means
-from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.bundle import Bundle
 
 
@@ -77,7 +76,6 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         h, w = img.shape[:2]
         frame_w = frame_w or w
         rgb_u8 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        linear = srgb_to_linear(rgb_u8)
         h_now, small = dhash(rgb_u8), rgb_u8[::8, ::8].astype(np.int16)
         if prev is not None and prev[1].shape == small.shape:
             hamming[i] = (h_now ^ prev[0]).bit_count()
@@ -89,7 +87,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
             regions = regions_from_landmarks(to_pixels(found["landmarks"], w, h), w, h)
             yaw[i] = _num(found.get("yaw"))
             box[i] = regions.face_box.clip(w, h).xywh()
-        for name, (mean, coverage) in region_means(linear, regions).items():
+        for name, (mean, coverage) in region_means(rgb_u8, regions).items():
             rgb[name][i] = mean
             cov[name][i] = coverage
     t = np.array([f.t_ms for f in bundle.frames], dtype=np.float64)
