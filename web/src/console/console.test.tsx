@@ -186,8 +186,8 @@ describe("helpers", () => {
   it("picks one frame per shown colour step and one in the middle of the turn", () => {
     const frames = pickEvidenceFrames(REPORT);
     expect(frames).toEqual([
-      { label: "c0 (hue 40°)", idx: 15 }, // 1510 ms at 10 fps
-      { label: "t0 turn left", idx: 73 }, // painted 5500 + 3500 / 2 = 7250 ms
+      { kind: "colour", label: "c0 (hue 40°)", idx: 15 }, // 1510 ms at 10 fps
+      { kind: "turn", label: "t0 turn left", idx: 73 }, // painted 5500 + 3500 / 2 = 7250 ms
     ]);
     expect(pickEvidenceFrames({ ...REPORT, frame_count: 0 })).toEqual([]);
   });

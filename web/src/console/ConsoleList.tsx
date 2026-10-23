@@ -1,39 +1,15 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, listSessions } from "../api/client";
-import type { SessionSummary } from "../contracts";
+import { listSessions } from "../api/client";
 import "./console.css";
 import { OUTCOME_TITLE } from "./OutcomeBanner";
 import { PasscodeGate } from "./PasscodeGate";
+import { POLL_ERROR_TEXT, usePoll } from "./usePoll";
 
 const POLL_MS = 2000;
 
 function SessionTable({ passcode, onUnauthorized }: { passcode: string; onUnauthorized: () => void }) {
-  const [rows, setRows] = useState<SessionSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      try {
-        const list = await listSessions(passcode);
-        if (!alive) return;
-        setRows(list);
-        setError(null);
-      } catch (e) {
-        if (!alive) return;
-        if (e instanceof ApiError && e.status === 401) return onUnauthorized();
-        setError("The PulseLens server is unreachable. Retrying…");
-      }
-      if (alive) timer = setTimeout(poll, POLL_MS);
-    };
-    void poll();
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [passcode, onUnauthorized]);
+  const { value: rows, error: pollError } = usePoll(() => listSessions(passcode), POLL_MS, { onUnauthorized, key: passcode });
+  const error = pollError && POLL_ERROR_TEXT[pollError];
 
   return (
     <main className="console">

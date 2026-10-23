@@ -12,6 +12,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import TypeAdapter, ValidationError
 
+from pulselens.api.common import session_or_404
+from pulselens.api.common import store as _store
 from pulselens.contracts import (
     Challenge,
     ChallengeEvent,
@@ -26,23 +28,16 @@ from pulselens.contracts import (
 from pulselens.engine.auth import bearer
 from pulselens.engine.fusion import customer_message
 from pulselens.engine.planner import make_challenge, plan_session, rng_for_nonce
-from pulselens.engine.store import FINISHED, SessionStore
+from pulselens.engine.store import FINISHED
 
 router = APIRouter(prefix="/api")
 EVENTS = TypeAdapter(list[ChallengeEvent])
 Auth = Annotated[str | None, Header(alias="Authorization")]
 
 
-def _store(request: Request) -> SessionStore:
-    return request.app.state.store
-
-
 def _customer(request: Request, session_id: str, authorization: str | None) -> dict[str, Any]:
+    session = session_or_404(request, session_id)
     store = _store(request)
-    try:
-        session = store.get(session_id)
-    except KeyError:
-        raise HTTPException(404, "unknown_session") from None
     if not store.signer.check(session_id, bearer(authorization)):
         raise HTTPException(401, "unauthorized")
     if store.effective_state(session) == "expired":
