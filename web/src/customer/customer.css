@@ -1,0 +1,83 @@
+/* Customer screens: mobile first (360 px wide, no sideways scroll). Shared base in shared/styles.css. */
+.customer {
+  max-width: 32rem;
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.customer .step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.customer h1 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.customer p {
+  margin: 0;
+}
+
+.customer .muted {
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
+.customer .status-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.customer .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.customer button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 2px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.customer button.primary {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+
+/* The camera <video>: always rendered while the camera is open (the grabber reads it), mirrored. */
+.customer video.selfview {
+  position: fixed;
+  top: 0;
+  right: 0;
+  transform: scaleX(-1);
+  border-radius: 8px;
+}
+
+/* Preflight: a small self-view in the top corner, at most 25% of the width. */
+.customer video.selfview-shown {
+  top: 8px;
+  right: 8px;
+  width: 25vw;
+}
+
+/* Challenge: tucked into the corner under the light overlay (inside its 18% border), until the turn raises it. */
+.customer video.selfview-hidden {
+  width: 16vmin;
+}
+
+.customer video.selfview-off {
+  display: none;
+}
