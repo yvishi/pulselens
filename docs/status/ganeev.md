@@ -3,11 +3,11 @@
 Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each section.
 
 ## Tasks
-- [ ] G1
-- [ ] G2
-- [ ] G3
-- [ ] G4
-- [ ] G5
+- [x] G1 — package skeleton, vision base, `analyze()`, synthetic bundles, CLI. Vision base ported from PulseLensV2 (byte-identical to PulseLensFinal for these files); `synth.py` rewritten for the new bundle (Challenge + ChallengeEvent, `write_bundle`, 478-point `landmarks.jsonl`). 30 analysis tests; full suite 37 passed, 0 skipped (Keshav's 2 OpenCV bundle tests now run), lint clean. `CHECKS` is still empty: real analysis returns no results until G3/G4. 2026-10-23.
+- [x] G2 — quality gate (`analysis/quality.py`: `WindowQuality`, `QualityReport`, `assess`), filled into `ctx.quality` by `build_context`; `light.response` now leaves out steps whose window is not usable and adds the window reasons to its abstain. 16 quality tests; full suite 127 passed, lint clean. Stacked on G3 (PR #7). 2026-10-23.
+- [x] G3 — `light.response` (`analysis/checks/light_response.py`, C.response) with `analysis/echo.py` ported from V2 (onset, constant-fraction onset, SNR gate; input is now a step's painted/ended/colour). 44 ported echo tests + 21 light tests; full suite 111 passed, lint clean. Stacked on G4 (PR #6). 2026-10-23.
+- [x] G4 — `sensor.cadence` and `sensor.duplicates` (`analysis/checks/sensor_stream.py`, vote group `B.stream`), ported from V2's `camera_timing`/`camera_duplicates`, now in `CHECKS`. 10 tests; full suite 46 passed, lint clean. Stacked on G1 (PR #4). 2026-10-23.
+- [x] G5 — `light.face_neck` (ported from V2's `optical_face_neck`, with the unclear-vs-silent fix) and `light.background` (new), both `C.relative`; shared helpers moved to `checks/light_common.py`. 23 tests; full suite 150 passed, lint clean. Stacked on G2 (PR #8). 2026-10-23.
 - [ ] G6
 - [ ] G7
 - [ ] G8
@@ -16,9 +16,42 @@ Only Ganeev (and Ganeev's agent) edits this file. Newest notes first in each sec
 - [ ] G11
 
 ## Decisions
+- **G5: the neck-only rule keeps the old repo's majority condition** (neck-only steps ≥ 2 **and** at least half of the measured steps), on top of the task's "≥ 2", so one or two odd steps cannot flag a genuine person.
+- **G5: the face–neck delay is reported (`median_cf_delta_ms`), not scored,** as the task says. V2 scored it; one webcam frame is longer than any lag limit.
+- **G5: the ratio rule rarely fires.** A pair needs both echoes at ≥ 2× their threshold, so a neck far weaker than the face usually becomes "too close to the noise" (abstain, `light.weak_echoes`) before its ratio can pass ln 4 + ½ ln 2 (5.66×). Synthetic: neck 0.1× at noise 0.003 abstains; neck 0.08× at noise 0.001 flags at 6.2×. Strong necks saturate in chromaticity (10× the screen light gives only a 0.39 ratio), so the high side does not flag either.
+- **G5: a swap can lose a step to "unclear":** a face noise frame peaking over its threshold makes that step not clearly silent (ported rule). The synthetic swap flags on 5 of 6.
+- **G5: light.background projects both regions' mean change onto the shown colour** (`echo.response`) over steps with a clear face echo; risk = 0.5 × ratio / 0.8. Genuine synthetic ratio is 0.07, a full-frame glossy screen (wall echo = face echo) 1.07. A real replay may differ; measure at S2. New code `light.background_hidden` (under 20% of the frame is background).
+- **G5: new code `light.weak_echoes`** for face_neck, because the weak side may be the neck, not the face.
+- **Test speed: 107 s → 50 s.** `server/tests/analysis/conftest.py` gives a session-scoped `synth` fixture: `synth.session(**kw)` renders each distinct set of `make_session` arguments once (never modify its files), and `synth.context(**kw)` hands out a deep copy of the built context. Tests that corrupt or copy frames keep their own `make_session(tmp_path, ...)`. Also: region means of a uint8 frame now go through a 256-bin histogram per channel and the linear lookup table (identical values, tested to 1e-12), so `build_context` no longer builds a float image (1.05 s → 0.65 s for 284 frames; this also counts towards G11's 90 s budget). And the fixture's pixel noise comes from random crops of a fixed noise bank (render 1.29 s → 0.77 s). The synthetic matrix is unchanged.
+- **G2: `WindowQuality.usable` ignores the neck; `blocking(neck=True)` adds it.** The neck rule only matters for checks that use the neck (face_neck, sensor.regions), as the task says. `quality.neck_hidden` is always in `reasons`.
+- **G2: the motion rule does not apply in a turn window, and the turn's frames are left out of "all"'s motion,** so asking the person to turn never makes the whole session "moving".
+- **G2: luma is the sRGB luma (0..255) of the skin region's mean linear colour; `luma_ok` is over face frames only** (no face is `quality.no_face`, not dark). too_dark vs too_bright comes from the median luma. Two new provisional keys: `min_luma_ok` 0.8 and `max_saturated` 0.2.
+- **G2: `assess(..., thresholds=)` takes the thresholds as a keyword** (the task's signature has no way to reach `quality:` otherwise); without it the file is loaded. `frame_w` is accepted but unused: motion is in face widths.
+- **G2 → light.response: a step whose window is not usable is left out** (it counts as neither answered nor silent). Its reasons join the abstain when fewer than 4 steps remain, e.g. "6 had poor capture (the face was too dark to measure)". The fps and no-face abstains now come from the "all" window.
+- **Test speed:** the server suite takes about 60 s now, because every light test renders its own synthetic session. Share the sessions with module-scoped fixtures at G11 if it gets in the way.
+- **G3: "unclear vs silent" applies to light.response too, not only face_neck.** A step with no echo counts as silent only when its 4-sigma threshold is at most half the session's median answered echo, and at most `max_silent_threshold` (0.012, provisional). Otherwise it is unclear and left out. Without this, a synthetic genuine session at noise 0.06 was **flagged** (3 of 6 answered). Now it abstains with `light.too_few_steps` + `light.weak_face_echo`. **Trade-off:** a replay at synthetic noise 0.02 also abstains instead of flagging. `max_silent_threshold` is the number to set from real bright-room webcam sessions at S2 (REFERENCE: bright-room echo SNR ~5).
+- **G3: `order_ok` is measured separately from the onset** (`echo.response`: mean chromaticity change over [painted + 200, ended + 100] ms, cosine with the shown colour ≥ 0.5) and only for steps that responded. A step that changes colour the wrong way is `light.wrong_order`, not `light.no_echo`. The synthetic `swap_colours=True` (each step echoes the colour half a sequence away) flags with `light.wrong_order`.
+- **G3: `median_snr` is in threshold units** (hold amplitude / max(4 sigma, a_min)), so 1 is just detectable.
+- **G3: fps below 12 and face present < 80% abstain before any step is measured** (`quality.low_fps`, `quality.no_face`). G2's window quality reasons are added once G2 exists.
+- **G3: an echo outside the 0–300 ms band counts as a failed step** (the face did change, just not on time).
+- **G4: dHash distance and frame difference are measured in `build_context`** (`hamming_prev`, `mad_prev`, against the previous *readable* frame), so frames are decoded once. A corrupt frame is never counted as a duplicate.
+- **G4: `sensor.too_regular` flags (risk 0.7 vs flag_at 0.6), as the task says, but it is a hypothesis.** The old repo only measured evenness because hardware-timestamped webcams are very even too. At S2, check `exact_share` and `cv` on real webcams and phones before trusting it.
+- **G4: duplicates may need a guard for phones with heavy temporal denoising.** A noise-free still source gives near-identical frames (the synthetic virtual camera: 96% repeats). Check the duplicate share of genuine phone sessions in a still, dim room at S2/G11.
+- **G4: too few frames for a stream check abstain with `quality.low_fps`** (fewer than 30 frames, or 30 compared pairs).
+- **G1: `guarded(*specs)` takes the `CheckSpec`s a check emits** (`@guarded(specs.SENSOR_CADENCE, specs.SENSOR_DUPLICATES)`), not a bare `guarded(fn)`: without them it cannot name the abstain. One abstain per spec, `quality.check_error`, traceback logged. `analyze()` also skips (and logs) a check that raises without the guard.
+- **G1: no readable frames → one abstain per CONTRACT §9 check** with `quality.no_frames` (empty dir, missing dir, all JPEGs corrupt). With frames, each check decides for itself.
+- **G1: the landmarks cache is not written when `face_landmarker.task` is missing**, so a later run with the model can still find faces.
+- **G1: synthetic frames are 320x240, not 160x120,** so the old geometry tests (face 80x110, chin at 150) port unchanged. In every kind the wall answers 5% of the screen light; `replay` and `virtual_camera` have no face or neck echo; `virtual_camera` also has a perfect clock and zero noise. Default echo SNR is about 77 (noise 0.003), so G3 should also test at higher noise.
+- **G1: `result(..., voting=False)` keeps `flag` false**, for `voting: false` checks in `thresholds.yaml` (prnu, pulse; S3 decisions).
 
 ## Measurements
+- **G5 synthetic matrix** (cadence / duplicates / response / face_neck / background): genuine ok×5; replay ok ok FLAG abst abst; swap ok ok FLAG FLAG abst; virtual camera FLAG FLAG FLAG abst abst; swapped colours ok ok FLAG abst abst; glossy screen ok ok ok ok FLAG; neck 0.3× and 3× ok×5; noise 0.06 ok ok abst abst abst.
+- **G3 (synthetic, 6 steps):** genuine median delay 88 ms at 30 fps and 81 ms at 15 fps (true 100 ms after painted; the onset is the 4-sigma crossing), SNR 18–22 at noise 0.003. The 60/100/150/250 ms delays are recovered within one frame. A whole `analyze()` on a 403-frame session takes 1.3 s.
+- **G1:** `build_context` 3.4 ms per frame at 320x240 with cached landmarks (404 frames in 1.38 s) on Keshav's laptop. The landmark pass at 640x480 is not measured yet (G11).
 
 ## Blocked
+- **#5 [for Keshav] `Bundle.read_frame` raises on a 0-byte JPEG.** Workaround in place: `analysis/context.py::read_frame` returns None instead. Remove it once #5 is fixed.
 
 ## Needs a human
+- **Yaw sign (G1, with Yash's Y2).** `analysis/vision/pose.py` computes `yaw = atan2(M[0,2], M[2,2])`, the same angle as the browser's `atan2(m[8], m[10])`, but nobody has checked the sign on a real face yet. Steps: record a lab session, turn your head to **your own left** during the turn, run `python -m pulselens.analysis data/sessions/<id>`, open `<id>/landmarks.jsonl`, and confirm `yaw` goes positive. If it goes negative, flip the sign in `pose.py` and tell Yash.
+- **SBI weights (G7).** Download `FFc23.tar` from the Google Drive link in the `mapooon/SelfBlendedImages` README to `models/sbi/FFc23.tar`. Do not commit it; record the source and licence here.
