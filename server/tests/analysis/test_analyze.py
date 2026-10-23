@@ -15,9 +15,9 @@ from pulselens.contracts import CheckResult
 from tests.fixtures.synth import make_session
 
 
-@pytest.fixture(scope="module")
-def genuine(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return make_session(tmp_path_factory.mktemp("genuine"), kind="genuine")
+@pytest.fixture
+def genuine(synth) -> Path:
+    return synth.session(kind="genuine")
 
 
 def _valid(results: list[CheckResult]) -> None:
@@ -58,6 +58,7 @@ def test_analyze_when_every_jpeg_is_corrupt(tmp_path: Path) -> None:
         f.write_bytes(b"")
     results = analyze(path)
     assert results and all(r.status == "abstain" for r in results)
+    assert all(r.explanation.startswith("None of the") for r in results)  # read as unreadable, not as a crash
 
 
 def test_context_measures_the_regions_and_the_yaw(genuine: Path) -> None:
@@ -78,9 +79,8 @@ def test_the_landmark_cache_is_used_as_is(genuine: Path) -> None:
     assert len(cache[0]["landmarks"]) == 478
 
 
-def test_no_face_gives_nan_regions_but_a_background(tmp_path: Path) -> None:
-    path = make_session(tmp_path, kind="genuine", turn=None, n_colour=1, face_in_frames=False)
-    ctx = build_context(load_bundle(path), Thresholds.load())
+def test_no_face_gives_nan_regions_but_a_background(synth) -> None:
+    ctx = synth.context(kind="genuine", turn=None, n_colour=1, face_in_frames=False)
     assert np.isnan(ctx.regions["skin"].rgb_linear).all() and np.isnan(ctx.yaw).all()
     assert np.isfinite(ctx.regions["background"].rgb_linear).all()
 

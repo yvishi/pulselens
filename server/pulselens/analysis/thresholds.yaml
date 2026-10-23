@@ -7,9 +7,11 @@ quality:
   min_fps: 12
   min_face_present: 0.8
   luma: [40, 220]            # face mean luma, sRGB 0..255
+  min_luma_ok: 0.8           # share of face frames inside the luma range
   min_neck_coverage: 0.5
   max_motion: 0.5            # face widths per second (not for the turn window)
   saturation: 0.95           # linear channel mean above which a region counts as clipped
+  max_saturated: 0.2         # share of face frames with the face or neck clipped
 
 echo:
   a_min: 0.003               # smallest projection on the colour direction (chromaticity units) that counts as an echo
@@ -19,6 +21,8 @@ light.response:
   flag_at: 0.5               # fewer than half the steps answered
   min_steps: 4
   min_cosine: 0.5            # measured vs expected colour direction
+  max_silent_threshold: 0.012  # 4x echo.a_min: a step with no echo whose 4-sigma threshold is above this cannot
+                               # be called silent (unclear). A guess: check against real bright-room webcams at S2
 
 light.face_neck:
   flag_at: 0.5
@@ -30,17 +34,23 @@ light.face_neck:
 
 light.background:
   flag_at: 0.5
-  max_bg_ratio: 0.8
+  max_bg_ratio: 0.8          # background colour change / face colour change; risk = 0.5 x ratio / this
+  min_steps: 3               # steps with a clear face echo
+  min_coverage: 0.2          # share of the frame left as background
 
 sensor.cadence:
   flag_at: 0.6
   max_gap_ms: 1000
   min_frames: 30
+  too_regular_share: 0.98    # share of intervals within 0.5 ms of the median ...
+  too_regular_cv: 0.01       # ... and interval spread below this: a perfect clock (hypothesis, measure at S2)
 
 sensor.duplicates:
   flag_at: 1.0
   max_share: 0.05
   min_frames: 30
+  max_hamming: 2             # dHash bits
+  max_mad: 0.5               # mean abs difference, 0..255, on a [::8] pixel grid
 
 sensor.mode_probe:
   flag_at: 0.7
