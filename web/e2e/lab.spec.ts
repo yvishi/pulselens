@@ -3,7 +3,8 @@ import { WEB } from "./support/bundle";
 import { readSessionFile } from "./support/sessionFile";
 
 // Y8: the Lab recording page in Brave's fake camera, against the real server (PULSE_DATA_DIR=data/e2e).
-test.describe.configure({ timeout: 90_000 });
+// Coaching rounds run here too (the fake camera has no face), so the waits are generous; see customer.spec.ts.
+test.describe.configure({ timeout: 150_000 });
 
 const LABEL = {
   person: "P07", device: "D03", light: "dim", kind: "replay_screen", tool: "phone_screen", set: "B", consent_ref: "CF-E2E-1",
@@ -39,7 +40,7 @@ test("a full recording writes session.json with the label", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Hand the device to the person" })).toBeVisible();
   await page.getByRole("button", { name: "The person has the device" }).click();
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Recording saved" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Recording saved" })).toBeVisible({ timeout: 90_000 });
 
   const id = (await page.getByTestId("lab-session-id").innerText()).trim();
   expect(id).toMatch(/^[0-9a-f]{16}$/);

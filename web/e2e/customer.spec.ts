@@ -7,7 +7,10 @@ const CONTINUE = "Thank you, you can continue the call.";
 const NO_FLASH = "I'd rather not see flashing colours";
 const LEAKS = ["risk", "family", "outcome", "check_id"];
 
-test.describe.configure({ timeout: 90_000 });
+// The fake camera has no face, so "Move closer" fires: 3 coaching rounds of 3 s plus a second preflight come
+// before the challenge (a real user with no face found should get that tip too). Hence the generous waits.
+test.describe.configure({ timeout: 150_000 });
+const RESULT_WAIT_MS = 90_000;
 
 /** Records every customer phase the page shows, and whether the page could scroll sideways in it. */
 async function recordPhases(page: Page) {
@@ -29,7 +32,7 @@ async function runFlow(page: Page, button: string) {
   const created = await createSession(page.request);
   await page.goto(`${WEB}${created.customer_url}`);
   await page.getByRole("button", { name: button, exact: true }).click();
-  await expect(page.getByText(CONTINUE)).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByText(CONTINUE)).toBeVisible({ timeout: RESULT_WAIT_MS });
   return created.session_id;
 }
 
