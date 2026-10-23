@@ -1,7 +1,9 @@
-"""FastAPI app: health, the customer session API (K2) and the analysis runner (K4), the agent API (K7)."""
+"""FastAPI app: health, session API (K2), analysis runner (K4), agent API (K7), demo purge (K11)."""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import functools
 from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +15,7 @@ from fastapi import FastAPI
 
 from pulselens.api import agent, sessions
 from pulselens.config import Settings, get_settings, load_config
+from pulselens.engine.purge import purge
 from pulselens.engine.runner import run_analysis
 from pulselens.engine.store import Clock, SessionStore, _wall_ms
 
@@ -40,7 +43,17 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        async def sweep() -> None:  # demo purge (K11): off the event loop, every 10 minutes after the first sweep
+            while True:
+                await asyncio.sleep(600)
+                await asyncio.to_thread(purge, settings.data_dir, now_ms=clock())
+
+        await asyncio.to_thread(purge, settings.data_dir, now_ms=clock())  # first sweep done before serving
+        task = asyncio.create_task(sweep())
         yield
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
         executor.shutdown(wait=False, cancel_futures=True)
         analyze_pool.shutdown(wait=False, cancel_futures=True)
 
