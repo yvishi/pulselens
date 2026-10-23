@@ -9,10 +9,10 @@ import cv2
 import numpy as np
 
 from pulselens.analysis.landmarks import landmarks_for
+from pulselens.analysis.quality import QualityReport, assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
 from pulselens.analysis.vision.frames import REGION_NAMES, dhash, region_means
-from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.bundle import Bundle
 
 
@@ -29,7 +29,7 @@ class AnalysisContext:
     regions: dict[str, RegionSeries]  # "skin", "left_cheek", "right_cheek", "neck", "background"
     yaw: np.ndarray  # (n,) degrees, NaN without a face (CONTRACT section 1 sign)
     face_box: np.ndarray  # (n, 4) x, y, w, h in pixels, NaN without a face
-    quality: Any  # QualityReport from G2's quality.assess; None until then
+    quality: QualityReport | None  # from quality.assess; build_context always fills it
     thresholds: Thresholds
     readable: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))  # (n,) the JPEG decoded
     frame_w: int = 0
@@ -76,7 +76,6 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         h, w = img.shape[:2]
         frame_w = frame_w or w
         rgb_u8 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        linear = srgb_to_linear(rgb_u8)
         h_now, small = dhash(rgb_u8), rgb_u8[::8, ::8].astype(np.int16)
         if prev is not None and prev[1].shape == small.shape:
             hamming[i] = (h_now ^ prev[0]).bit_count()
@@ -88,16 +87,18 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
             regions = regions_from_landmarks(to_pixels(found["landmarks"], w, h), w, h)
             yaw[i] = _num(found.get("yaw"))
             box[i] = regions.face_box.clip(w, h).xywh()
-        for name, (mean, coverage) in region_means(linear, regions).items():
+        for name, (mean, coverage) in region_means(rgb_u8, regions).items():
             rgb[name][i] = mean
             cov[name][i] = coverage
+    t = np.array([f.t_ms for f in bundle.frames], dtype=np.float64)
+    series = {name: RegionSeries(rgb_linear=rgb[name], coverage=cov[name]) for name in REGION_NAMES}
     return AnalysisContext(
         bundle=bundle,
-        t=np.array([f.t_ms for f in bundle.frames], dtype=np.float64),
-        regions={name: RegionSeries(rgb_linear=rgb[name], coverage=cov[name]) for name in REGION_NAMES},
+        t=t,
+        regions=series,
         yaw=yaw,
         face_box=box,
-        quality=None,
+        quality=assess(t, series, box, frame_w, bundle.events, bundle.challenge, thresholds=thresholds),
         thresholds=thresholds,
         readable=readable,
         frame_w=frame_w,
