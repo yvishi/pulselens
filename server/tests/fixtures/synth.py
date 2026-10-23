@@ -188,6 +188,7 @@ def make_session(
     turn_start_ms: float = 300.0,
     turn_returns: bool = True,
     face_lost_in_turn: float = 0.0,
+    echo_gain: float = 1.0,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -198,7 +199,9 @@ def make_session(
     wall's share of the screen light (a glossy replay screen filling the frame answers evenly, near 1).
     Turn: `turn_performed` is the direction actually turned, `turn_start_ms` the reaction time after the prompt,
     `turn_returns` whether the head comes back, `face_lost_in_turn` the share of the turn window (painted to
-    ended + 500 ms) at its peak where no face is found."""
+    ended + 500 ms) at its peak where no face is found.
+    `echo_gain`: how much of the screen light reaches the scene at all (a screen farther away or a brighter room);
+    around 0.02 the face's echo sits at the onset threshold, like the weak bright-room webcam session of issue #17."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -213,13 +216,14 @@ def make_session(
         t = np.sort(t + rng.normal(0, 1.0, len(t)))
         t = t - t[0]
 
-    face_k = K if kind == "genuine" else 0.0
-    neck_k = K * neck_gain if kind in ("genuine", "swap_no_face_echo") else 0.0
+    k_screen = K * echo_gain
+    face_k = k_screen if kind == "genuine" else 0.0
+    neck_k = k_screen * neck_gain if kind in ("genuine", "swap_no_face_echo") else 0.0
     lit = [e.shown_rgb for e in events if e.shown_rgb is not None]
     lit = [lit[(k + len(lit) // 2) % len(lit)] for k in range(len(lit))] if swap_colours and lit else None
     face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
     neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
-    wall = _light(t, interval, events, delay_ms, background_echo * K) * WALL
+    wall = _light(t, interval, events, delay_ms, background_echo * k_screen) * WALL
     yaw = _yaw(t, events, ch, turn_followed, performed=turn_performed, start_ms=turn_start_ms,
                returns=turn_returns) + (0 if perfect else rng.normal(0, 0.5, len(t)))
     lost = np.zeros(len(t), dtype=bool)

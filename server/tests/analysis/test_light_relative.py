@@ -161,3 +161,13 @@ def test_heavy_noise_is_never_a_flag(synth, kind: str, noise: float) -> None:
 def test_analyze_includes_both(synth) -> None:
     ids = {r.check_id for r in analyze(synth.session(kind="genuine", turn=None))}
     assert {"light.face_neck", "light.background"} <= ids
+
+
+@pytest.mark.parametrize("noise", [0.003, 0.006])
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_a_faint_face_beside_a_strong_shirt_is_not_neck_only(synth, noise: float, seed: int) -> None:
+    # Issue #17: under weak light a face can answer below its onset threshold while a bright shirt answers clearly.
+    # The face's mean change still pushes towards the colour, so the step is unclear, not neck-only.
+    ctx = synth.context(kind="genuine", turn=None, noise=noise, seed=seed, echo_gain=0.05, neck_gain=8.0)
+    r = light_face_neck.run(ctx)[0]
+    assert not r.flag, r.explanation
