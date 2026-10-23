@@ -7,6 +7,7 @@ import { Consent } from "./steps/Consent";
 import { ErrorStep } from "./steps/ErrorStep";
 import { Result } from "./steps/Result";
 import { Status } from "./steps/Status";
+import { ringTurnPrompt } from "./steps/TurnPrompt";
 import { t, turnKey, type Lang } from "./strings";
 
 /** Phases where the camera is open and the <video> must stay rendered (the grabber reads it). */
@@ -30,6 +31,7 @@ export function CustomerPage() {
     const s = new CaptureSession({
       sessionId, token, video: video.current, overlayRoot: document.body, onState: setState,
       turnText: (dir) => t(turnKey(dir), lang),
+      turnPrompt: ringTurnPrompt(),
     });
     session.current = s;
     void s.start(noFlashRequested); // called inside the click: the overlay may ask for fullscreen
