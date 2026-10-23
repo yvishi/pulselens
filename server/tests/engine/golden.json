@@ -1,0 +1,587 @@
+{
+ "genuine": {
+  "decision": {
+   "outcome": "PASS",
+   "reasons": [
+    "Enough usable evidence was captured and none of it raised risk."
+   ],
+   "step_up": null
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.058240198,
+    "status": "usable"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "genuine_15fps": {
+  "decision": {
+   "outcome": "PASS",
+   "reasons": [
+    "Enough usable evidence was captured and none of it raised risk."
+   ],
+   "step_up": null
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.040042975,
+    "status": "usable"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "genuine_noisy": {
+  "decision": {
+   "outcome": "PASS",
+   "reasons": [
+    "Enough usable evidence was captured and none of it raised risk.",
+    "Light challenge could not judge: Only 3 of 6 colour steps could be judged on the face (need 4); 3 were too noisy to tell an echo from silence. Face and neck both answered clearly on 0 of 6 colour steps (need 3); 3 too close to the noise. The face answered the light clearly on only 0 of 6 colour steps (need 3), so there is nothing to compare the background with."
+   ],
+   "step_up": null
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": false,
+    "reason_codes": [
+     "light.too_few_steps",
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [
+     "light.too_few_steps",
+     "light.weak_echoes"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "replay": {
+  "decision": {
+   "outcome": "RETRY_STEP_UP",
+   "reasons": [
+    "One kind of evidence raised risk; a further check is needed before deciding.",
+    "Suggested next step: run a fresh challenge.",
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would."
+   ],
+   "step_up": "fresh_challenge"
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": true,
+    "reason_codes": [
+     "light.no_echo"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [
+     "light.too_few_steps"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "swap": {
+  "decision": {
+   "outcome": "RETRY_STEP_UP",
+   "reasons": [
+    "One kind of evidence raised risk; a further check is needed before deciding.",
+    "Suggested next step: run a fresh challenge.",
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would. The neck answered the screen light on 4 of 4 colour steps while the face did not, as a face drawn over a real person would. This compares the face with the neck as a hypothesis against live face swaps."
+   ],
+   "step_up": "fresh_challenge"
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": true,
+    "reason_codes": [
+     "light.no_echo"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": true,
+    "reason_codes": [
+     "light.neck_only"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "swapped_colours": {
+  "decision": {
+   "outcome": "RETRY_STEP_UP",
+   "reasons": [
+    "One kind of evidence raised risk; a further check is needed before deciding.",
+    "Suggested next step: run a fresh challenge.",
+    "Light challenge: The face changed colour on 6 of 6 colour steps, but never towards the colour shown, as a recording of another session would."
+   ],
+   "step_up": "fresh_challenge"
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": true,
+    "reason_codes": [
+     "light.wrong_order"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [
+     "light.too_few_steps"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "virtual": {
+  "decision": {
+   "outcome": "HUMAN_REVIEW",
+   "reasons": [
+    "Two independent kinds of evidence raised risk, so a person must review it.",
+    "Sensor and stream: 100% of frame intervals were within 0.5 ms of 33.3 ms (spread 0.00%), a perfect clock; a hypothesis for virtual cameras. 392 of 403 frames repeated the one before (97.3%; limit 5%).",
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would."
+   ],
+   "step_up": null
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": true,
+    "reason_codes": [
+     "sensor.too_regular"
+    ],
+    "risk": 0.7,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": true,
+    "reason_codes": [
+     "sensor.duplicates"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": true,
+    "reason_codes": [
+     "light.no_echo"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [
+     "light.too_few_steps"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [
+     "light.weak_face_echo"
+    ],
+    "risk": null,
+    "status": "abstain"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   }
+  ]
+ },
+ "wrong_turn": {
+  "decision": {
+   "outcome": "RETRY_STEP_UP",
+   "reasons": [
+    "One kind of evidence raised risk; a further check is needed before deciding.",
+    "Suggested next step: run a fresh challenge.",
+    "Visual and motion: Asked to turn to their right, the head turned 31 degrees the other way and at most 1 degrees the way asked."
+   ],
+   "step_up": "fresh_challenge"
+  },
+  "results": [
+   {
+    "check_id": "integrity.protocol",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "integrity.coverage",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.cadence",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "sensor.duplicates",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.response",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.face_neck",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.0,
+    "status": "usable"
+   },
+   {
+    "check_id": "light.background",
+    "flag": false,
+    "reason_codes": [],
+    "risk": 0.058240198,
+    "status": "usable"
+   },
+   {
+    "check_id": "turn.follow",
+    "flag": true,
+    "reason_codes": [
+     "turn.wrong_direction"
+    ],
+    "risk": 1.0,
+    "status": "usable"
+   }
+  ]
+ }
+}
