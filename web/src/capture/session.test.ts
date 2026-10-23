@@ -3,7 +3,8 @@ import { ApiError } from "../api/client";
 import type { Challenge, ChallengeEvent, CustomerStatus, Plan, Preflight } from "../contracts";
 import type { CoachMetrics } from "./coaching";
 import type { GrabberOptions } from "./grabber";
-import { CaptureSession, type CaptureSessionDeps, type CaptureState } from "./session";
+import type { UploaderOptions, UploaderStats } from "./uploader";
+import { cameraError, CaptureSession, type CaptureSessionDeps, type CaptureState } from "./session";
 
 const PLAN: Plan = { mode: "CAPABLE", run_light: true, run_turn: true, agent_questions: false, reasons: ["mode.capable.ok"] };
 const CHALLENGE: Challenge = {
@@ -32,6 +33,8 @@ function stubs(over: Partial<CaptureSessionDeps> = {}) {
     { state: "done", message: "continue" },
   ];
   let grabberOpts: GrabberOptions | null = null;
+  let uploaderOpts: UploaderOptions | null = null;
+  const fps = { now: 30 as number | null };
   let flushRelease: (() => void) | null = null;
   const uploader = {
     push: vi.fn(),
@@ -75,20 +78,29 @@ function stubs(over: Partial<CaptureSessionDeps> = {}) {
         stop: () => void log.push("grabber.stop"),
         close: () => void log.push("grabber.close"),
         stats: () => ({ frames: 0, medianFps: 30, droppedRatio: 0, clock: "now" as const }),
+        fpsOver: () => fps.now,
       };
     }),
-    createUploader: vi.fn(() => uploader),
+    createUploader: vi.fn((o: UploaderOptions) => ((uploaderOpts = o), uploader)),
     runChallenge: vi.fn(async (_ch, d) => {
       log.push(`runChallenge(t0=${d.t0})`);
       expect(d.shouldSkipLight()).toBeNull();
       return EVENTS;
     }),
     createCoachMeter: vi.fn(() => ({ measure: vi.fn(async () => GOOD) })),
+    shouldLock: vi.fn(() => false),
+    lockForLight: vi.fn(async () => {
+      log.push("lock");
+      return { lock: null, restore: async () => void log.push("restore") };
+    }),
     now: () => 1234,
     sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
     ...over,
   };
-  return { deps, log, uploader, overlay, grabberOpts: () => grabberOpts, releaseFlush: () => flushRelease?.() };
+  return {
+    deps, log, uploader, overlay, fps, grabberOpts: () => grabberOpts, releaseFlush: () => flushRelease?.(),
+    reportUploads: (st: Partial<UploaderStats>) => uploaderOpts!.onStats!({ sent: 0, dropped: 0, failedBatches: 0, ...st }),
+  };
 }
 
 function session(deps: CaptureSessionDeps) {
@@ -262,5 +274,113 @@ describe("CaptureSession", () => {
     await done;
     expect(reason).toBe("no_flash");
     expect(states.at(-1)).toMatchObject({ phase: "result", agentQuestions: true });
+  });
+
+  it("an fps drop during the challenge skips the remaining colour steps (the grabber's fps over the last 2 s < 12)", async () => {
+    const reasons: (string | null)[] = [];
+    const st = stubs({
+      runChallenge: vi.fn(async (_ch, d) => {
+        reasons.push(d.shouldSkipLight());
+        st.fps.now = 8;
+        reasons.push(d.shouldSkipLight());
+        st.fps.now = 30; // a recovery does not bring the colours back
+        reasons.push(d.shouldSkipLight());
+        return EVENTS;
+      }),
+    });
+    const { s } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(reasons).toEqual([null, "fps_drop", "fps_drop"]);
+  });
+
+  it("says the connection is weak after 2 failed batches, without changing the phase", async () => {
+    const seen: CaptureState[] = [];
+    const st = stubs({
+      runChallenge: vi.fn(async () => {
+        st.reportUploads({ failedBatches: 1 });
+        seen.push({ ...states.at(-1)! });
+        st.reportUploads({ failedBatches: 2 });
+        seen.push({ ...states.at(-1)! });
+        return EVENTS;
+      }),
+    });
+    const { s, states } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(states.at(-1)).toMatchObject({ phase: "uploading", weakConnection: true });
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(seen[0]).toMatchObject({ phase: "challenge" });
+    expect(seen[0]!.weakConnection).toBeFalsy();
+    expect(seen[1]).toMatchObject({ phase: "challenge", weakConnection: true });
+    expect(states.at(-1)).toMatchObject({ phase: "result", detail: "continue" });
+  });
+
+  it.each([
+    ["NotAllowedError", "camera_denied"],
+    ["SecurityError", "camera_denied"],
+    ["NotFoundError", "camera_missing"],
+    ["NotReadableError", "camera_busy"],
+    ["AbortError", "camera_busy"],
+    ["OverconstrainedError", "camera_error"],
+    ["TypeError", "camera_error"],
+  ])("a camera %s ends in the %s error, once, with no retry", async (name, detail) => {
+    const err = Object.assign(new Error(name), { name });
+    const st = stubs({ openCamera: vi.fn(async () => { throw err; }) });
+    const { s, states } = session(st.deps);
+    await s.start(false);
+    expect(states.map((x) => x.phase)).toEqual(["camera", "error"]);
+    expect(states.at(-1)!.detail).toBe(detail);
+    expect(st.deps.openCamera).toHaveBeenCalledTimes(1);
+    expect(cameraError(err)).toBe(detail);
+  });
+
+  it("cameraError copes with odd throws", () => {
+    expect(cameraError(null)).toBe("camera_error");
+    expect(cameraError("denied")).toBe("camera_error");
+  });
+
+  it("?lock=1: locks the camera around the challenge and restores it afterwards", async () => {
+    const st = stubs({ shouldLock: vi.fn(() => true) });
+    st.deps.runPreflight = vi.fn(async () => ({ no_flash_requested: false, measured_fps: 10.4 }) as Preflight);
+    const { s } = session(st.deps);
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(st.deps.lockForLight).toHaveBeenCalledWith(expect.anything(), 10.4);
+    const i = st.log.indexOf("runChallenge(t0=1234)");
+    expect(st.log.indexOf("lock")).toBeLessThan(i);
+    expect(st.log.indexOf("restore")).toBeGreaterThan(i);
+    expect(st.log.indexOf("restore")).toBeLessThan(st.log.indexOf("stopCamera"));
+  });
+
+  it("no lock without the flag, or on a no-flash plan", async () => {
+    const plain = stubs();
+    const a = session(plain.deps);
+    const d1 = a.s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    plain.releaseFlush();
+    await vi.runAllTimersAsync();
+    await d1;
+    expect(plain.deps.lockForLight).not.toHaveBeenCalled();
+
+    const nf = stubs({ shouldLock: vi.fn(() => true) });
+    nf.deps.api.postPreflight = vi.fn(async () => ({
+      mode: "NO_FLASH" as const, run_light: false, run_turn: true, agent_questions: true, reasons: ["mode.no_flash.requested"],
+    }));
+    const b = session(nf.deps);
+    const d2 = b.s.start(true);
+    await vi.advanceTimersByTimeAsync(0);
+    nf.releaseFlush();
+    await vi.runAllTimersAsync();
+    await d2;
+    expect(nf.deps.lockForLight).not.toHaveBeenCalled();
   });
 });

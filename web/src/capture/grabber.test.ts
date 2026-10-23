@@ -23,11 +23,12 @@ function fakeVideo(w = 640, h = 480) {
   return { video, fire };
 }
 
-function grabber(video: HTMLVideoElement, t0 = 0) {
+function grabber(video: HTMLVideoElement, t0 = 0, clock?: () => number) {
   const frames: GrabbedFrame[] = [];
   const encode = vi.fn<FrameEncoder["encode"]>(async () => new Blob(["x"], { type: "image/jpeg" }));
   const g = new FrameGrabber(video, {
     size: [640, 480], jpegQuality: 0.9, t0, onFrame: (f) => frames.push(f), encoder: { encode, close: vi.fn() },
+    now: clock,
   });
   return { g, frames, encode };
 }
@@ -131,5 +132,24 @@ describe("FrameGrabber (rVFC)", () => {
     v2.fire(43, { captureTime: 43, presentedFrames: 2 });
     await flush();
     expect(f2.map((f) => f.idx)).toEqual([1]);
+  });
+
+  it("fpsOver(ms): null until the grabber has run for ms, then frames in the last ms per second", () => {
+    let t = 1000;
+    const { video, fire } = fakeVideo();
+    const { g } = grabber(video, 0, () => t);
+    g.start(); // started at 1000
+    for (let k = 0; k < 30; k++) fire(0, { captureTime: 1000 + 33.3 * k, presentedFrames: k + 1 });
+    t = 2000;
+    expect(g.fpsOver(2000)).toBeNull();
+    // 30 fps until 3000, then 5 fps until 5000
+    for (let k = 30; k < 60; k++) fire(0, { captureTime: 1000 + 33.3 * k, presentedFrames: k + 1 });
+    t = 3000;
+    expect(g.fpsOver(2000)).toBeCloseTo(30, 0);
+    for (let k = 1; k <= 10; k++) fire(0, { captureTime: 3000 + 200 * k, presentedFrames: 60 + k });
+    t = 5000;
+    expect(g.fpsOver(2000)).toBeCloseTo(5, 0);
+    t = 7500; // a frozen stream: no frames at all in the window
+    expect(g.fpsOver(2000)).toBe(0);
   });
 });

@@ -13,6 +13,8 @@ import { browserLang, t, turnKey, type Lang } from "./strings";
 
 /** Phases where the camera is open and the <video> must stay rendered (the grabber reads it). */
 const CAMERA_PHASES = new Set(["camera", "preflight", "coaching", "ready", "challenge"]);
+/** Phases where frames are still going out, so "Weak connection, still sending…" applies. */
+const WEAK_PHASES = new Set(["challenge", "uploading", "waiting"]);
 
 export interface CaptureFlowProps {
   sessionId: string;
@@ -54,7 +56,7 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
     void s.start(noFlashRequested); // called inside the click: the overlay may ask for fullscreen
   };
 
-  const { phase, detail, tips, agentQuestions } = state;
+  const { phase, detail, tips, agentQuestions, weakConnection } = state;
   return (
     <main className={className ? `customer ${className}` : "customer"} data-phase={phase} lang={lang} {...data}>
       <video
@@ -73,6 +75,11 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
       {phase === "challenge" && <Status lang={lang} text="challenge.look" />}
       {(phase === "uploading" || phase === "waiting") && (
         <Status lang={lang} text="waiting.text" hint={agentQuestions ? "agent.questions" : undefined} />
+      )}
+      {weakConnection && WEAK_PHASES.has(phase) && (
+        <p className="muted weak-connection" role="status" aria-live="polite">
+          {t("upload.weak", lang)}
+        </p>
       )}
       {phase === "result" &&
         (renderResult ? renderResult(state, lang) : <Result lang={lang} message={detail} agentQuestions={agentQuestions} />)}

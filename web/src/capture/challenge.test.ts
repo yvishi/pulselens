@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Challenge, ChallengeEvent, Step } from "../contracts";
-import { isRedHue, runChallenge, type Overlay } from "./challenge";
+import { FPS_DROP_MIN, FPS_DROP_WINDOW_MS, fpsDropSkip, isRedHue, runChallenge, type Overlay } from "./challenge";
 import { now } from "./clock";
 
 /** A fake overlay: each paint/clear lands one 16 ms frame later and is logged in ms since t0. */
@@ -76,9 +76,29 @@ describe("runChallenge", () => {
     expect(overlay.changes).toHaveLength(2);
   });
 
-  it("an fps drop skips the remaining colour steps but not the turn", async () => {
+  it("a constant skip reason skips every colour step but not the turn", async () => {
     const { events } = await run(challenge(steps), () => "fps_drop");
     expect(events!.map((e) => e.status)).toEqual(["skipped", "skipped", "shown", "skipped"]);
+  });
+
+  it("fps drop skips the remaining colour steps but not the turn", async () => {
+    // The real wiring: fpsDropSkip reads the grabber's fps over the last 2 s before each colour step.
+    // 30 fps for c0, a drop to 8 fps before c1, then a recovery that must not bring the colours back.
+    const fps = [30, 8, 30];
+    const grabber = { fpsOver: vi.fn<(ms: number) => number>(() => fps.shift() ?? 30) };
+    const { events, overlay } = await run(challenge(steps), fpsDropSkip(grabber));
+    expect(events!.map((e) => [e.step_id, e.status, e.skip_reason])).toEqual([
+      ["c0", "shown", null], ["c1", "skipped", "fps_drop"], ["t0", "shown", null], ["c2", "skipped", "fps_drop"],
+    ]);
+    expect(overlay.changes).toHaveLength(2); // only c0 painted and cleared
+    expect(grabber.fpsOver).toHaveBeenCalledWith(FPS_DROP_WINDOW_MS);
+    expect(grabber.fpsOver).toHaveBeenCalledTimes(2); // sticky after the drop
+  });
+
+  it("fps drop: no verdict before 2 s of frames, and exactly 12 fps is not a drop", () => {
+    expect(fpsDropSkip({ fpsOver: () => null })()).toBeNull();
+    expect(fpsDropSkip({ fpsOver: () => FPS_DROP_MIN })()).toBeNull();
+    expect(fpsDropSkip({ fpsOver: () => FPS_DROP_MIN - 0.5 })()).toBe("fps_drop");
   });
 
   it.each([350, 0, 10, 15, 345, 359, -5, 370])("throws on red hue %i before painting anything", async (hue) => {
