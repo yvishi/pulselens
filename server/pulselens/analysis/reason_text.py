@@ -40,6 +40,7 @@ REASON_TEXT: dict[str, str] = {
     "turn.not_performed": "The head turn was not performed.",
     "turn.wrong_direction": "The head turned the opposite way to the prompt.",
     "turn.face_lost": "The face was lost during the head turn.",
+    "turn.no_return": "The head turned as asked but had not come back by the end (noted, not scored).",
     "turn.too_fast": "The head turn started unusually fast after the prompt (measured, not scored).",
     "turn.no_frontal": "There were no frontal frames on both sides of the turn.",
     "turn.identity_change": "The face's proportions changed through the turn.",

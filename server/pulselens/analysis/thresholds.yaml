@@ -69,7 +69,13 @@ turn.follow:
   flag_at: 0.5
   min_peak_deg: 15
   max_return_deg: 10
-  still_deg: 10
+  still_deg: 10              # below this either way the head did not move; above it towards the side = the start
+  max_face_lost: 0.4         # share of the turn window without a face before turn.face_lost
+  face_lost_risk: 0.6        # a hypothesis (swaps drop the face at large angles); one family -> a retry
+  too_fast_ms: 150           # noted, not scored
+  baseline_ms: 500           # yaw0 = median yaw over this long before the prompt
+  tail_ms: 500               # the window runs to ended + this
+  return_window_ms: 300      # return_deg = median |yaw - yaw0| over the window's last 300 ms
 
 turn.identity:
   flag_at: 0.5

@@ -144,17 +144,26 @@ def _light(t: np.ndarray, exposure: float, events: list[ChallengeEvent], delay: 
     return light
 
 
-def _yaw(t: np.ndarray, events: list[ChallengeEvent], ch: Challenge, followed: bool) -> np.ndarray:
-    """Head yaw: still, then (when followed) out to 30 degrees in the requested direction and back."""
+def _turn_event(ch: Challenge, events: list[ChallengeEvent]) -> ChallengeEvent | None:
+    turn = next((s for s in ch.steps if isinstance(s, TurnStep)), None)
+    return next((e for e in events if turn is not None and e.step_id == turn.step_id), None)
+
+
+def _yaw(t: np.ndarray, events: list[ChallengeEvent], ch: Challenge, followed: bool, *, performed: str | None,
+         start_ms: float, returns: bool) -> np.ndarray:
+    """Head yaw: still, then (when followed) out to 30 degrees and, if `returns`, back before the step ends.
+    `performed` is the direction actually turned (default: the one requested)."""
     yaw = np.zeros(len(t))
     turn = next((s for s in ch.steps if isinstance(s, TurnStep)), None)
-    ev = next((e for e in events if turn is not None and e.step_id == turn.step_id), None)
+    ev = _turn_event(ch, events)
     if turn is None or ev is None or not followed:
         return yaw
-    sign = 1.0 if turn.direction == "left" else -1.0  # CONTRACT section 1: positive = the person's own left
-    up0, up1 = ev.painted_t_ms + 300, ev.painted_t_ms + 700
+    sign = 1.0 if (performed or turn.direction) == "left" else -1.0  # CONTRACT section 1: + = the person's own left
+    up0, up1 = ev.painted_t_ms + start_ms, ev.painted_t_ms + start_ms + 400
     down0, down1 = ev.ended_t_ms - 800, ev.ended_t_ms - 400
-    ramp = np.clip((t - up0) / (up1 - up0), 0, 1) - np.clip((t - down0) / (down1 - down0), 0, 1)
+    ramp = np.clip((t - up0) / (up1 - up0), 0, 1)
+    if returns:
+        ramp = ramp - np.clip((t - down0) / (down1 - down0), 0, 1)
     return sign * TURN_DEG * ramp
 
 
@@ -175,6 +184,10 @@ def make_session(
     neck_gain: float = 1.0,
     face_noise_gain: float = 1.0,
     background_echo: float = 0.05,
+    turn_performed: Literal["left", "right"] | None = None,
+    turn_start_ms: float = 300.0,
+    turn_returns: bool = True,
+    face_lost_in_turn: float = 0.0,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -182,7 +195,10 @@ def make_session(
     session's challenge), while events.jsonl records what this session painted.
     `neck_gain`: how strongly the neck (or shirt) answers the screen relative to the face, as a darker or shinier
     shirt does. `face_noise_gain`: extra per-frame illumination jitter on the face only. `background_echo`: the
-    wall's share of the screen light (a glossy replay screen filling the frame answers evenly, near 1)."""
+    wall's share of the screen light (a glossy replay screen filling the frame answers evenly, near 1).
+    Turn: `turn_performed` is the direction actually turned, `turn_start_ms` the reaction time after the prompt,
+    `turn_returns` whether the head comes back, `face_lost_in_turn` the share of the turn window (painted to
+    ended + 500 ms) at its peak where no face is found."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -204,7 +220,14 @@ def make_session(
     face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
     neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
     wall = _light(t, interval, events, delay_ms, background_echo * K) * WALL
-    yaw = _yaw(t, events, ch, turn_followed) + (0 if perfect else rng.normal(0, 0.5, len(t)))
+    yaw = _yaw(t, events, ch, turn_followed, performed=turn_performed, start_ms=turn_start_ms,
+               returns=turn_returns) + (0 if perfect else rng.normal(0, 0.5, len(t)))
+    lost = np.zeros(len(t), dtype=bool)
+    ev = _turn_event(ch, events)
+    if face_lost_in_turn > 0 and ev is not None:
+        w0, w1 = ev.painted_t_ms, ev.ended_t_ms + 500
+        mid, half = (w0 + w1) / 2, face_lost_in_turn * (w1 - w0) / 2
+        lost = (t >= mid - half) & (t <= mid + half)
 
     fx0, fy0, fx1, fy1 = 120, int(chin_y - 110), 200, int(chin_y)
     frames, lms = [], {}
@@ -221,7 +244,7 @@ def make_session(
         ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
         assert ok
         frames.append((FrameMeta(idx=i, t_ms=float(ti), w=W, h=H), jpeg.tobytes()))
-        lms[i] = {"landmarks": lm, "yaw": float(yaw[i]), "pitch": 0.0} if face_in_frames else None
+        lms[i] = {"landmarks": lm, "yaw": float(yaw[i]), "pitch": 0.0} if face_in_frames and not lost[i] else None
 
     label = Label(person="P00", device="D00", light="normal", kind=LABEL_KIND[kind], set="A", consent_ref="synthetic")
     session = {"session_id": session_id, "nonce": ch.nonce, "product": "savings_account", "no_flash": False,
