@@ -23,6 +23,8 @@ export interface UploaderOptions {
   sleep?: (ms: number) => Promise<void>;
   /** one attempt's timeout */
   timeoutMs?: number;
+  /** called with the counters after every batch (sent or failed), e.g. to say the connection is weak */
+  onStats?: (s: UploaderStats) => void;
 }
 
 export interface UploaderStats {
@@ -128,6 +130,7 @@ export class FrameUploader {
     } finally {
       this.busy = false;
     }
+    this.opts.onStats?.(this.stats());
   }
 
   /** True once the server has the batch. The same meta (and batch_seq) goes out on every attempt. */

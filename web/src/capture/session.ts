@@ -2,18 +2,22 @@
  * One customer (or Lab) capture session, start to result. React only renders the state this reports.
  *
  * camera -> runPreflight (+ coaching measure) -> up to 3 coaching rounds, then runPreflight again -> postPreflight (Plan) -> getChallenge -> FrameGrabber (t0 = challenge start) + runChallenge
- * on a LightOverlay -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
+ * on a LightOverlay (exposure locked around it behind ?lock=1) -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
  *
  * The server's plan decides what runs: on a NO_FLASH plan (or run_light false) every colour step is skipped
  * ("no_flash"), so nothing is painted and only the turn runs; the agent then asks a few questions.
  * completeSession is never called while a frame batch is in flight (the uploader is flushed or stopped first).
+ *
+ * Hardening (Y9): an fps drop (< 12 fps over the last 2 s) skips the remaining colour steps ("fps_drop"), never the
+ * turn; after 2 failed frame batches the state carries weakConnection (the screen says "Weak connection, still
+ * sending"); each getUserMedia failure maps to one error detail, with no retry loop.
  * Every dependency is injectable, so the Lab page and the tests reuse the same flow.
  */
 import * as client from "../api/client";
 import { ApiError } from "../api/client";
 import type { Challenge, ChallengeEvent, CustomerMessage, CustomerStatus, FrameBatchMeta, Plan, Preflight } from "../contracts";
 import { openCamera, stopCamera, type OpenCamera } from "./camera";
-import { runChallenge } from "./challenge";
+import { fpsDropSkip, runChallenge } from "./challenge";
 import { COACH_ROUNDS, COACH_ROUND_MS, coachTips, createCoachMeter, type CoachMeter, type CoachTip } from "./coaching";
 import { now } from "./clock";
 import { DESKTOP_SIZE, JPEG_QUALITY, MOBILE_SIZE, UPLOAD_BATCH_MS } from "./constants";
@@ -22,6 +26,7 @@ import { sleep } from "./flash";
 import { FrameGrabber, type GrabberOptions, type GrabberStats } from "./grabber";
 import { LightOverlay, chooseOverlayMode, type OverlayMode } from "./overlay";
 import { createFaceTracker, type FaceTracker } from "./face";
+import { lockForLight, shouldLock, type CameraLock } from "./lock";
 import { PREFLIGHT_MS, runPreflight } from "./preflight";
 import { textTurnPrompt, type TurnDirection, type TurnPromptFactory } from "./turnPrompt";
 import { FrameUploader, type UploaderOptions, type UploaderStats } from "./uploader";
@@ -44,6 +49,8 @@ export interface CaptureState {
   agentQuestions?: boolean;
   /** coaching: at most 2 tips for this round */
   tips?: CoachTip[];
+  /** set once 2 frame batches have failed: "Weak connection, still sending" (kept until the end) */
+  weakConnection?: boolean;
 }
 
 export interface CaptureApi {
@@ -69,6 +76,8 @@ export interface SessionGrabber {
   stop(): void;
   close(): void;
   stats(): GrabberStats;
+  /** frames per second over the last ms, null until the grabber has run that long */
+  fpsOver(ms: number): number | null;
 }
 
 export type SessionUploader = Pick<FrameUploader, "push" | "flush" | "stop" | "stats">;
@@ -86,6 +95,9 @@ export interface CaptureSessionDeps {
   createUploader: (opts: UploaderOptions) => SessionUploader;
   runChallenge: typeof runChallenge;
   createCoachMeter: (video: HTMLVideoElement) => CoachMeter;
+  /** whether to try the exposure lock (the ?lock=1 experiment) */
+  shouldLock: (pf: Preflight) => boolean;
+  lockForLight: (track: MediaStreamTrack, fps: number | null) => Promise<{ lock: CameraLock | null; restore: () => Promise<void> }>;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
 }
@@ -111,6 +123,8 @@ export const POLL_MS = 1000;
 export const MAX_POLLS = 180;
 /** Time for the grabber's last encodes to reach the uploader after stop(). */
 export const ENCODE_SETTLE_MS = 200;
+/** Failed frame batches before the screen says the connection is weak. */
+export const WEAK_AFTER_FAILED_BATCHES = 2;
 
 const DEFAULT_TURN_TEXT = (dir: TurnDirection) => `Turn your head to your ${dir.toUpperCase()}, then back to the centre`;
 
@@ -135,15 +149,21 @@ export const defaultDeps = (): CaptureSessionDeps => ({
   createUploader: (opts) => new FrameUploader(opts),
   runChallenge,
   createCoachMeter: (video) => createCoachMeter(video, faceTracker()),
+  shouldLock: (pf) => typeof location !== "undefined" && shouldLock(pf, location.search),
+  lockForLight,
   now,
   sleep,
 });
 
-/** Maps a getUserMedia failure to an error detail. */
+/**
+ * Maps a getUserMedia failure to an error detail (one clear customer message each, no retry loop):
+ * denied (NotAllowedError, SecurityError), no camera (NotFoundError), in use by another app (NotReadableError,
+ * AbortError), anything else including OverconstrainedError (a camera exists but would not start) -> camera_error.
+ */
 export function cameraError(e: unknown): CaptureErrorDetail {
-  const name = (e as { name?: string } | null)?.name;
+  const name = typeof e === "object" && e !== null ? (e as { name?: unknown }).name : undefined;
   if (name === "NotAllowedError" || name === "SecurityError") return "camera_denied";
-  if (name === "NotFoundError" || name === "OverconstrainedError") return "camera_missing";
+  if (name === "NotFoundError") return "camera_missing";
   if (name === "NotReadableError" || name === "AbortError") return "camera_busy";
   return "camera_error";
 }
@@ -179,6 +199,13 @@ export class CaptureSession {
     this.opts.onState(this.state);
   }
 
+  /** Raises the weak-connection flag once, keeping the phase and everything else. */
+  private onUploadStats(s: UploaderStats): void {
+    if (this.disposed || this.state.weakConnection || s.failedBatches < WEAK_AFTER_FAILED_BATCHES) return;
+    this.state = { ...this.state, weakConnection: true };
+    this.opts.onState(this.state);
+  }
+
   /** Call straight from the Start click: the overlay asks for fullscreen while the user gesture is live. */
   async start(noFlashRequested: boolean): Promise<void> {
     if (this.started) return;
@@ -201,7 +228,7 @@ export class CaptureSession {
 
       this.set({ phase: "challenge", agentQuestions: plan.agent_questions });
       const noFlash = plan.mode === "NO_FLASH" || !plan.run_light;
-      const events = await this.capture(challenge, size, await overlayMode, noFlash);
+      const events = await this.capture(challenge, size, await overlayMode, noFlash, preflight);
 
       this.set({ phase: "uploading" });
       await d.api.postEvents(id, token, events);
@@ -250,14 +277,19 @@ export class CaptureSession {
 
   /** Grabber + challenge on the overlay; returns the events. t0 is the challenge start. */
   private async capture(
-    challenge: Challenge, size: [number, number], mode: OverlayMode, noFlash: boolean,
+    challenge: Challenge, size: [number, number], mode: OverlayMode, noFlash: boolean, preflight: Preflight,
   ): Promise<ChallengeEvent[]> {
     const d = this.deps;
     const { sessionId, token, video } = this.opts;
+    // The ?lock=1 experiment: freeze exposure / white balance before t0, hand them back after the challenge.
+    const lock = !noFlash && this.cam && d.shouldLock(preflight)
+      ? await d.lockForLight(this.cam.track, preflight.measured_fps ?? null)
+      : null;
+    if (lock?.lock) console.info("camera lock", lock.lock);
     const t0 = d.now();
     const overlay = (this.overlay = d.createOverlay(this.opts.overlayRoot, mode, t0));
     const uploader = (this.uploader = d.createUploader({
-      sessionId, token, batchMs: UPLOAD_BATCH_MS, postFrames: d.api.postFrames,
+      sessionId, token, batchMs: UPLOAD_BATCH_MS, postFrames: d.api.postFrames, onStats: (s) => this.onUploadStats(s),
     }));
     const grabber = (this.grabber = d.createGrabber(video, {
       size, jpegQuality: JPEG_QUALITY, t0, onFrame: (f) => uploader.push(f),
@@ -266,12 +298,15 @@ export class CaptureSession {
     const showTurnPrompt = (this.opts.turnPrompt ?? textTurnPrompt)({
       overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT,
     });
+    const fpsDrop = fpsDropSkip(grabber);
     const shouldSkipLight = () =>
       (noFlash ? "no_flash" : null) ??
-      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ?? this.opts.shouldSkipLight?.(grabber) ?? null;
+      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ??
+      fpsDrop() ?? this.opts.shouldSkipLight?.(grabber) ?? null;
     try {
       return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight });
     } finally {
+      await lock?.restore();
       grabber.stop();
       overlay.dispose();
       this.overlay = null;

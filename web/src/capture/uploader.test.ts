@@ -55,7 +55,7 @@ describe("FrameUploader", () => {
     expect(up.stats()).toEqual({ sent: 90, dropped: 10, failedBatches: 0 });
   });
 
-  it("retries a network error twice with 500 ms backoff, then counts a failed batch", async () => {
+  it("retries twice then counts a failed batch (network error, 500 ms backoff)", async () => {
     const { post, calls } = fakePost(() => Promise.reject(new TypeError("Failed to fetch")));
     const up = uploader(post);
     for (let i = 0; i < 5; i++) up.push(frame(i));
@@ -175,5 +175,19 @@ describe("FrameUploader", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(calls).toHaveLength(1);
     expect(up.stats()).toEqual({ sent: 30, dropped: 20, failedBatches: 0 });
+  });
+
+  it("reports the stats after every batch through onStats, so the page can say the connection is weak", async () => {
+    const { post } = fakePost((_c, k) => (k < 6 ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve()));
+    const seen: number[] = [];
+    const up = uploader(post, { onStats: (st) => seen.push(st.failedBatches) });
+    for (let i = 0; i < 3; i++) {
+      up.push(frame(i));
+      const done = up.flush();
+      await vi.runAllTimersAsync();
+      await done;
+    }
+    expect(seen).toEqual([1, 2, 2]);
+    expect(up.stats()).toEqual({ sent: 1, dropped: 0, failedBatches: 2 });
   });
 });

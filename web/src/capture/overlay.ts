@@ -24,6 +24,14 @@ export async function chooseOverlayMode(desktop: boolean, el: Element = document
   }
 }
 
+/**
+ * The overlay height: 100dvh follows iOS Safari's collapsing toolbars (no Fullscreen API on iPhone, so the overlay
+ * itself has to cover the visible viewport); 100vh where dvh is unknown.
+ */
+export function viewportHeight(): string {
+  return globalThis.CSS?.supports?.("height", "100dvh") ? "100dvh" : "100vh";
+}
+
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 export class LightOverlay {
@@ -45,9 +53,10 @@ export class LightOverlay {
     this.element = document.createElement("div");
     this.element.dataset.lightOverlay = mode;
     Object.assign(this.element.style, {
-      position: "fixed", inset: "0", zIndex: "2147483000", pointerEvents: "none", boxSizing: "border-box",
+      position: "fixed", top: "0", right: "0", bottom: "0", left: "0", zIndex: "2147483000", pointerEvents: "none", boxSizing: "border-box",
       borderStyle: "solid", borderWidth: "0", display: "flex", alignItems: "center", justifyContent: "center",
     });
+    if (mode === "fullscreen") Object.assign(this.element.style, { bottom: "auto", width: "100%", height: viewportHeight() });
     // Readable on any colour: white text on a dark 50% backdrop.
     this.prompt = document.createElement("div");
     Object.assign(this.prompt.style, {

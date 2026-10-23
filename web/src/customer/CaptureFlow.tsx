@@ -1,6 +1,7 @@
 // The capture screens shared by the customer page and the Lab page: the <video>, the CaptureSession wiring (overlay,
 // ring turn prompt, language) and the phase -> screen mapping. CaptureSession drives everything; this only renders it.
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { startTap, type DeviceSession } from "../capture/device";
 import { CaptureSession, type CaptureState } from "../capture/session";
 import "./customer.css";
 import { Coaching } from "./steps/Coaching";
@@ -13,6 +14,8 @@ import { browserLang, t, turnKey, type Lang } from "./strings";
 
 /** Phases where the camera is open and the <video> must stay rendered (the grabber reads it). */
 const CAMERA_PHASES = new Set(["camera", "preflight", "coaching", "ready", "challenge"]);
+/** Phases where frames are still going out, so "Weak connection, still sending…" applies. */
+const WEAK_PHASES = new Set(["challenge", "uploading", "waiting"]);
 
 export interface CaptureFlowProps {
   sessionId: string;
@@ -40,11 +43,23 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
   );
   const video = useRef<HTMLVideoElement>(null);
   const session = useRef<CaptureSession | null>(null);
+  const device = useRef<DeviceSession | null>(null);
 
-  useEffect(() => () => session.current?.dispose(), []);
+  useEffect(
+    () => () => {
+      session.current?.dispose();
+      device.current?.release();
+    },
+    [],
+  );
+  // The session is over: give back the wake lock and leave fullscreen.
+  useEffect(() => {
+    if (state.phase === "result" || state.phase === "error") device.current?.release();
+  }, [state.phase]);
 
   const start = (noFlashRequested: boolean) => {
     if (session.current || !video.current) return;
+    device.current = startTap(); // first, synchronously inside the click: fullscreen, wake lock, iOS motion prompt
     const s = new CaptureSession({
       sessionId, token, video: video.current, overlayRoot: document.body, onState: setState,
       turnText: (dir) => t(turnKey(dir), lang),
@@ -54,7 +69,7 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
     void s.start(noFlashRequested); // called inside the click: the overlay may ask for fullscreen
   };
 
-  const { phase, detail, tips, agentQuestions } = state;
+  const { phase, detail, tips, agentQuestions, weakConnection } = state;
   return (
     <main className={className ? `customer ${className}` : "customer"} data-phase={phase} lang={lang} {...data}>
       <video
@@ -73,6 +88,11 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
       {phase === "challenge" && <Status lang={lang} text="challenge.look" />}
       {(phase === "uploading" || phase === "waiting") && (
         <Status lang={lang} text="waiting.text" hint={agentQuestions ? "agent.questions" : undefined} />
+      )}
+      {weakConnection && WEAK_PHASES.has(phase) && (
+        <p className="muted weak-connection" role="status" aria-live="polite">
+          {t("upload.weak", lang)}
+        </p>
       )}
       {phase === "result" &&
         (renderResult ? renderResult(state, lang) : <Result lang={lang} message={detail} agentQuestions={agentQuestions} />)}

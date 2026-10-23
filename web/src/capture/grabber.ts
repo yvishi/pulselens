@@ -8,6 +8,8 @@
  *
  * Each frame is scaled to fit `size` and JPEG-encoded as delivered (no filters). Frames whose time does not move
  * forward are skipped, so idx and t_ms strictly increase. Frames reach onFrame in idx order.
+ *
+ * fpsOver(ms) is the recent frame rate (frames in the last ms), for the Y9 fps-drop downgrade.
  */
 import { now } from "./clock";
 import { createEncoder, type FrameEncoder } from "./encoder";
@@ -30,6 +32,7 @@ export interface GrabberOptions {
   onFrame: (f: GrabbedFrame) => void;
   source?: GrabberSource;
   encoder?: FrameEncoder; // injectable for tests
+  now?: () => number; // injectable for tests; performance.now() by default
 }
 
 export interface GrabberStats {
@@ -46,6 +49,8 @@ interface VideoFrameLike {
 type ProcessorCtor = new (init: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrameLike> };
 
 const MAX_INTERVALS = 300;
+/** Frame times kept for fpsOver: 5 s at 60 fps. */
+const MAX_TIMES = 300;
 
 /** Fits (w, h) inside a box of the same orientation, keeping aspect and never upscaling. */
 export function fitSize(w: number, h: number, box: readonly [number, number]): [number, number] {
@@ -63,6 +68,8 @@ export class FrameGrabber {
   private presented = 0;
   private dropped = 0;
   private clock: FrameClock = "now";
+  private startedAt: number | null = null;
+  private times: number[] = [];
   private chain: Promise<void> = Promise.resolve();
   private stopVideoFrame?: () => void;
   private readonly encoder: FrameEncoder;
@@ -77,6 +84,7 @@ export class FrameGrabber {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.startedAt = (this.opts.now ?? now)();
     const source = this.opts.source ?? "auto";
     const hasRvfc = "requestVideoFrameCallback" in this.video;
     const Processor = (globalThis as unknown as { MediaStreamTrackProcessor?: ProcessorCtor }).MediaStreamTrackProcessor;
@@ -105,6 +113,20 @@ export class FrameGrabber {
       droppedRatio: total ? this.dropped / total : 0,
       clock: this.clock,
     };
+  }
+
+  /**
+   * Frames per second over the last `ms` (frame times in the performance.now() domain), or null until the grabber
+   * has run for `ms`. A frozen stream reads 0.
+   */
+  fpsOver(ms: number): number | null {
+    if (this.startedAt === null) return null;
+    const at = (this.opts.now ?? now)();
+    if (at - this.startedAt < ms) return null;
+    const from = at - ms;
+    let n = 0;
+    for (let k = this.times.length - 1; k >= 0 && this.times[k]! >= from; k--) n++;
+    return (n * 1000) / ms;
   }
 
   private runRvfc(): void {
@@ -165,6 +187,8 @@ export class FrameGrabber {
       if (this.intervals.length > MAX_INTERVALS) this.intervals.shift();
     }
     this.lastT = t;
+    this.times.push(t);
+    if (this.times.length > MAX_TIMES) this.times.shift();
     this.clock = clock;
     if (presented !== null) {
       if (this.lastPresented !== null && presented > this.lastPresented) this.dropped += presented - this.lastPresented - 1;

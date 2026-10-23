@@ -8,8 +8,12 @@ export const API = "http://127.0.0.1:8000";
 export const WEB = "http://localhost:5173";
 export const DATA = path.resolve(import.meta.dirname, "../../../data/e2e");
 
-export async function createSession(request: APIRequestContext, body: SessionCreate = {}): Promise<SessionCreated> {
-  const r = await request.post(`${API}/api/sessions`, { data: body });
+export async function createSession(
+  request: APIRequestContext,
+  body: SessionCreate = {},
+  api = API,
+): Promise<SessionCreated> {
+  const r = await request.post(`${api}/api/sessions`, { data: body });
   if (r.status() !== 201) throw new Error(`createSession: ${r.status()} ${await r.text()}`);
   return (await r.json()) as SessionCreated;
 }
