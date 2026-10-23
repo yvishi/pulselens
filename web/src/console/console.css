@@ -1,0 +1,298 @@
+/* Agent console: read at a desk on 1366x768 and 1920x1080. Body text at least 18 px. */
+.console {
+  font-size: 18px;
+  max-width: 96rem;
+}
+
+.console h1 {
+  font-size: 1.6rem;
+  margin: 0.25rem 0;
+}
+
+.console .error {
+  color: #a32d2d;
+  font-weight: 600;
+}
+
+.console .muted {
+  opacity: 0.75;
+}
+
+.passcode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.passcode label,
+.actions label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sessions {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sessions th,
+.sessions td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #8884;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85em;
+  border: 1px solid currentColor;
+}
+
+.outcome-PASS { color: #0f6e56; }
+.outcome-RETRY_STEP_UP { color: #854f0b; }
+.outcome-HUMAN_REVIEW { color: #a32d2d; }
+
+.session-head .labels {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plan ul {
+  margin: 0.25rem 0 0;
+}
+
+.banner {
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+.banner h2 {
+  margin: 0 0 0.5rem;
+}
+
+.banner ul {
+  color: CanvasText;
+  margin: 0;
+}
+
+.banner .decides {
+  color: CanvasText;
+  font-weight: 700;
+  margin: 0.5rem 0 0;
+}
+
+.banner-pending {
+  color: #5f5e5a;
+}
+
+.timeline .lane {
+  position: relative;
+  height: 2.2rem;
+  margin: 0.4rem 0 0.4rem 6.5rem;
+  background: #8881;
+  border-radius: 4px;
+}
+
+.timeline .lane-label {
+  position: absolute;
+  left: -6.5rem;
+  top: 0.35rem;
+  width: 6rem;
+  font-size: 0.85em;
+}
+
+.timeline .step,
+.timeline .baseline {
+  position: absolute;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  border-radius: 3px;
+}
+
+.timeline .baseline {
+  background: #8883;
+}
+
+.timeline .step.turn {
+  background: #185fa533;
+  border: 1px solid #185fa5;
+  text-align: center;
+  font-weight: 700;
+}
+
+.timeline .event {
+  position: absolute;
+  top: 0.45rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-left: -0.4rem;
+  line-height: 0.8rem;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.timeline .event.shown {
+  background: #0f6e56;
+  border-radius: 50%;
+}
+
+.timeline .event.skipped,
+.timeline .event.missing {
+  color: #a32d2d;
+  font-weight: 700;
+}
+
+.family-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 1rem;
+}
+
+.family {
+  border: 1px solid #8886;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  min-width: 0;
+}
+
+.family header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.family h3 {
+  margin: 0.2rem 0;
+  font-size: 1.1rem;
+}
+
+.state-flag { color: #a32d2d; }
+.state-not_raised { color: #0f6e56; }
+.state-abstained { color: #854f0b; }
+.state-not_run { color: #5f5e5a; }
+
+.family .note {
+  font-style: italic;
+}
+
+.check-group h4 {
+  margin: 0.6rem 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.check {
+  border-left: 4px solid #8886;
+  padding: 0.25rem 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.check-flag,
+.check-protocol_error {
+  border-left-color: #a32d2d;
+}
+
+.check-abstain {
+  border-left-color: #854f0b;
+}
+
+.check summary {
+  cursor: pointer;
+}
+
+.check-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.4rem 0;
+}
+
+.check-meta div {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.check-meta dt {
+  font-weight: 600;
+}
+
+.check-meta dd {
+  margin: 0;
+}
+
+.features {
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+
+.features th,
+.features td {
+  padding: 0.1rem 0.5rem;
+  text-align: left;
+  font-weight: normal;
+}
+
+.plot {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.plot-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #5f5e5a;
+}
+
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.thumb {
+  margin: 0;
+  width: 11rem;
+}
+
+.thumb img,
+.thumb-empty {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #8882;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb figcaption {
+  font-size: 0.8em;
+}
+
+.actions .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.6rem 0;
+}
+
+.actions textarea {
+  font: inherit;
+  max-width: 40rem;
+}
+
+.action-approve { border: 2px solid #0f6e56; }
+.action-reverify { border: 2px solid #854f0b; }
+.action-escalate { border: 2px solid #a32d2d; }
