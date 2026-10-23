@@ -189,6 +189,7 @@ def make_session(
     turn_returns: bool = True,
     face_lost_in_turn: float = 0.0,
     echo_gain: float = 1.0,
+    face_pixel_noise_gain: float = 1.0,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -201,7 +202,9 @@ def make_session(
     `turn_returns` whether the head comes back, `face_lost_in_turn` the share of the turn window (painted to
     ended + 500 ms) at its peak where no face is found.
     `echo_gain`: how much of the screen light reaches the scene at all (a screen farther away or a brighter room);
-    around 0.02 the face's echo sits at the onset threshold, like the weak bright-room webcam session of issue #17."""
+    around 0.02 the face's echo sits at the onset threshold, like the weak bright-room webcam session of issue #17.
+    `face_pixel_noise_gain`: the sensor noise inside the face box relative to the rest of the frame (below 1: a face
+    smoother than the real neck around it, as a repainted face may be)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -243,7 +246,11 @@ def make_session(
             img[fy1:H, 130:190] = neck[i] + (rng.normal(0, noise / 5, 3) if noise else 0)
             img[fy0:fy1, fx0:fx1] = face[i] + (rng.normal(0, face_noise_gain * noise / 5, 3) if noise else 0)
         if noise:
-            img += _noise_field(rng) * np.float32(noise)
+            field = _noise_field(rng) * np.float32(noise)
+            if face_in_frames and face_pixel_noise_gain != 1.0:
+                field = field.copy()
+                field[fy0:fy1, fx0:fx1] *= np.float32(face_pixel_noise_gain)
+            img += field
         srgb = _ENCODE[np.clip(img * (_ENCODE_STEPS - 1) + 0.5, 0, _ENCODE_STEPS - 1).astype(np.int32)]
         ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
         assert ok

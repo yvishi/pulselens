@@ -21,11 +21,13 @@ REASON_TEXT: dict[str, str] = {
     "quality.frames_missing": "Some video frames were lost on the way to the server; that gap is not held against "
                               "the camera.",
     "quality.page_hidden": "The page was in the background for a while, so no video arrived then.",
+    "quality.too_few_frames": "Too few usable video frames for this measurement.",
     # family B: sensor and stream (G4, G8)
     "sensor.stall": "The video stopped for more than a second.",
     "sensor.too_regular": "Frames arrived on a perfectly regular clock, unlike a physical camera.",
     "sensor.duplicates": "Many frames were near-identical repeats.",
     "sensor.probe_too_perfect": "The camera switched to an unusual mode instantly and without losing a frame.",
+    "sensor.probe_not_run": "The camera mode probe did not run or no mode was accepted (unsupported, not failed).",
     "sensor.phantom_switch": "The camera reported a new size but the delivered frames did not change.",
     "sensor.regions_mismatch": "The face's noise or sharpness differed from the neck and background.",
     "sensor.prnu_weak": "No stable sensor noise pattern was found (supporting evidence only).",

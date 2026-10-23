@@ -59,11 +59,14 @@ sensor.duplicates:
 
 sensor.mode_probe:
   flag_at: 0.7
-  max_switch_ms: 150
+  max_switch_ms: 150         # the unusual mode delivered faster than this, with no missing frame: too perfect
+  unusual_size: [1000, 750]  # the mode real webcams rarely offer (Yash's PROBE_MODES)
 
 sensor.regions:
   flag_at: 0.5
-  ratio_log_tolerance: 0.916 # ln 2.5
+  ratio_log_tolerance: 0.916 # ln 2.5: face noise within 2.5x of the neck's and background's scores nothing
+  ratio_log_scale: 0.693     # ln 2 per score unit beyond that
+  min_frames: 20             # still frames with a face
 
 sensor.prnu:
   flag_at: 1.0
