@@ -261,6 +261,16 @@ describe("ConsoleSession", () => {
     expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3", no_flash: true });
   });
 
+  it("re-verify keeps the customer's own no-flash choice", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, preflight: { ...REPORT.preflight!, no_flash_requested: true } });
+    api.postAgentDecision.mockResolvedValue(undefined);
+    api.createSession.mockResolvedValue({ session_id: "next", customer_url: "/customer/next?t=tok" });
+    at("/console/d79105c5121a3cb3");
+    const reverify = await screen.findByRole("button", { name: "Re-verify" });
+    await act(async () => fireEvent.click(reverify));
+    expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3", no_flash: true });
+  });
+
   it("assisted_kyc step-up shows the bank process and suggests no button", async () => {
     api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "assisted_kyc" } });
     const { container } = at("/console/d79105c5121a3cb3");

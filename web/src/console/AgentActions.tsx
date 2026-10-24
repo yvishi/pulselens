@@ -31,10 +31,12 @@ interface Props {
   outcome?: Outcome | null;
   /** the suggested step-up: decides whether Re-verify is suggested and whether the next attempt skips the flash */
   stepUp?: StepUp | null;
+  /** the customer asked for no flashing light: every new link they get keeps that */
+  customerNoFlash?: boolean;
 }
 
 /** The agent's call. Re-verify also creates the next attempt and shows its customer link. */
-export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded, outcome, stepUp }: Props) {
+export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded, outcome, stepUp, customerNoFlash }: Props) {
   const id = useId();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
       await postAgentDecision(sessionId, passcode, { action, note });
       setAt(new Date().toLocaleTimeString());
       if (action === "reverify") {
-        const created = await createSession({ product, previous_session_id: sessionId, no_flash: stepUp === "no_flash" });
+        const created = await createSession({ product, previous_session_id: sessionId, no_flash: stepUp === "no_flash" || Boolean(customerNoFlash) });
         setNext({ url: customerLink(window.location.origin, created.customer_url), sessionId: created.session_id ?? null });
       }
       onRecorded();
