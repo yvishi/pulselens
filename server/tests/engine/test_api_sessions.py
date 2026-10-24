@@ -17,6 +17,7 @@ from pulselens.contracts import Decision, FamilySummary, Plan
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
 from pulselens.engine.store import SessionStore
+from tests.engine.api import SyncExecutor
 
 FORBIDDEN = ("risk", "flag", "check_id", "family", "outcome")
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
@@ -49,6 +50,13 @@ def clock() -> Clock:
 def client(tmp_path: Path, clock: Clock) -> TestClient:
     settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
     with TestClient(create_app(settings, runner=fake_runner, clock=clock)) as c:
+        yield c
+
+
+@pytest.fixture
+def sync_client(tmp_path: Path, clock: Clock) -> TestClient:
+    settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
+    with TestClient(create_app(settings, runner=fake_runner, clock=clock, executor=SyncExecutor())) as c:
         yield c
 
 
@@ -291,19 +299,16 @@ def test_exact_resend_after_complete_is_not_an_after_complete_attempt(client: Te
     assert [r["idx"] for r in rows(tmp_path, s)] == [0, 1]
 
 
-def test_customer_payloads_have_no_scores(client: TestClient) -> None:
+def test_customer_payloads_have_no_scores(sync_client: TestClient) -> None:
+    client = sync_client
     s = create(client)
     sid = s["session_id"]
     responses = [client.post(f"/api/sessions/{sid}/preflight", headers=auth(s), json=preflight())]
     responses.append(client.get(f"/api/sessions/{sid}/challenge", headers=auth(s)))
     responses.append(post_frames(client, s, [0, 1, 2]))
     responses.append(client.post(f"/api/sessions/{sid}/complete", headers=auth(s)))
-    for _ in range(50):
-        status = client.get(f"/api/sessions/{sid}/status", headers=auth(s))
-        responses.append(status)
-        if status.json()["state"] == "done":
-            break
-        time.sleep(0.02)
+    status = client.get(f"/api/sessions/{sid}/status", headers=auth(s))
+    responses.append(status)
     assert status.json() == {"state": "done", "message": "continue"}
     assert set(status.json()) == {"state", "message"}
     for r in responses:
