@@ -1,14 +1,16 @@
-"""sensor.regions (family B, B.regions): does the face carry the same sensor noise as the neck and the room around it?
+"""sensor.regions (family B, B.regions): does the face carry the same sensor noise as the neck next to it?
 New in this repo. **A hypothesis:** a face repainted by a live swap model may be smoother (or noisier) than the real
-neck and background next to it, which one camera sensor gives about the same noise.
+neck next to it, which one camera sensor gives about the same noise.
 
 Per-frame temporal noise and sharpness of the face, neck and background come from build_context (vision/noise.py).
 Only still frames count: the baseline and the gaps between steps, never a colour step (the light changes) or the
 turn (the head moves), from 100 ms before a step to 400 ms after it.
-- Scored: the median noise ratios face/neck and face/background. Risk grows from |ln ratio| beyond ln 2.5
-  (`ratio_log_tolerance`), one unit per ln 2 (`ratio_log_scale`), from the worse of the two.
-- Reported, not scored: the sharpness ratio face/neck (`sharp_face_neck_ratio`). Skin and a patterned shirt differ in
-  texture for real, so it needs genuine data before it can mean anything.
+- Scored: the median noise ratio face/neck. Risk grows from |ln ratio| beyond ln 2.5 (`ratio_log_tolerance`), one
+  unit per ln 2 (`ratio_log_scale`).
+- Reported, not scored: the noise ratio face/background and the sharpness ratio face/neck. The first real genuine
+  webcam session (S2, a converted PulseLensFinal recording) had face/neck 1.10 but face/background 6.1: a room
+  differs from a face in brightness, focus and depth, so its noise is not the face's. Skin and a patterned shirt differ
+  in texture for real, so sharpness needs genuine data before it can mean anything.
 Abstains when the face moves, the neck is hidden, a region is clipped, there are too few still frames, or the
 video was compressed too hard to keep the sensor noise (JPEG quality under `min_jpeg_quality`, 80; G11: at quality
 50 the encoder wiped the neck's noise to 0 and the ratio flagged a genuine face). The browser sends quality 90.
@@ -90,18 +92,17 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     features = {"noise_face_neck_ratio": face_neck, "noise_face_bg_ratio": face_bg,
                 "sharp_face_neck_ratio": sharp_neck, "still_frames": n_still,
                 "noise_face": float(np.nanmedian(noise["face"][still]))}
-    scored = [r for r in (face_neck, face_bg) if r is not None and r > 0]
-    if face_neck is None or not scored:
+    if face_neck is None or face_neck <= 0:
         return [abstain(SPEC, ["quality.neck_hidden"], "The neck's noise could not be measured on the still frames.",
                         features=features, window_id="all")]
     tol = float(ctx.thresholds.param(SPEC.check_id, "ratio_log_tolerance"))
-    excess = max(abs(math.log(r)) for r in scored) - tol
+    excess = abs(math.log(face_neck)) - tol
     risk = max(0.0, excess) / float(ctx.thresholds.param(SPEC.check_id, "ratio_log_scale"))
     flag_at = ctx.thresholds.flag_at(SPEC.check_id)
     limit = math.exp(tol)
-    bg = f" and {face_bg:.2f}x the background's" if face_bg is not None else ""
-    explanation = (f"The face's sensor noise was {face_neck:.2f}x the neck's{bg} over {n_still} still frames "
-                   f"(limit {limit:.1f}x either way). {HYPOTHESIS}")
+    bg = f" (background {face_bg:.2f}x, reported only)" if face_bg is not None else ""
+    explanation = (f"The face's sensor noise was {face_neck:.2f}x the neck's over {n_still} still frames "
+                   f"(limit {limit:.1f}x either way){bg}. {HYPOTHESIS}")
     return [result(SPEC, ctx.thresholds, risk=risk, quality=min(1.0, n_still / (2 * min_frames)), features=features,
                    reasons=["sensor.regions_mismatch"] if risk >= flag_at else [], explanation=explanation,
                    window_id="all")]

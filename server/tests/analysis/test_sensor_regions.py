@@ -32,6 +32,14 @@ def test_a_face_4x_smoother_or_noisier_than_the_neck_is_flagged(synth, gain: flo
     assert r.features["noise_face_neck_ratio"] == pytest.approx(gain, rel=0.25)
 
 
+def test_a_background_unlike_the_face_is_reported_not_scored(synth) -> None:
+    ctx = synth.context(kind="genuine", noise=REAL_NOISE)
+    ctx.noise["background"] = ctx.noise["background"] / 6  # S2: a real room was 6.1x quieter than the face
+    r = _one(ctx)
+    assert r.status == "usable" and not r.flag and r.risk == 0, r.explanation
+    assert r.features["noise_face_bg_ratio"] == pytest.approx(6, rel=0.2) and "reported only" in r.explanation
+
+
 def test_a_face_within_2_5x_is_not_flagged(synth) -> None:
     r = _one(synth.context(kind="genuine", noise=REAL_NOISE, face_pixel_noise_gain=0.6))
     assert r.status == "usable" and not r.flag
