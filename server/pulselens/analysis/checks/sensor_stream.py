@@ -5,6 +5,10 @@ camera_duplicates checks.
   gap. A stall (longest gap over `max_gap_ms`) gives risk 1. "Too perfect" timing gives risk 0.7: a hypothesis that a
   virtual camera delivers frames on a perfect clock. The old repo measured evenness without voting on it because
   hardware-timestamped webcams are very even too, so this cue needs real-webcam numbers at S2.
+  Gaps the camera is not to blame for are left out of the timing (issue #33; AGENTS.md rule 3): frames lost in upload
+  (the browser numbers every frame it grabs, so `idx` jumps across the gap; integrity.coverage reports them), and a
+  gap spanning the scheduled start of a step the client skipped because the page was hidden (no frames arrive while
+  a tab is in the background). Only a gap where `idx` stays consecutive is a stall.
 - duplicates: a frame is a near-duplicate of the previous readable one when their dHashes differ by <= 2 bits and
   the mean absolute difference on a [::8] pixel grid is < 0.5 (0..255). Relays and virtual cameras repeat frames when
   they cannot keep up.
@@ -17,25 +21,54 @@ import numpy as np
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.result import CheckSpec, abstain, guarded, result
-from pulselens.contracts import CheckResult, Plot
+from pulselens.contracts import CheckResult, ColourStep, Plot, TurnStep
 
 CADENCE, DUPLICATES = specs.SENSOR_CADENCE, specs.SENSOR_DUPLICATES
 MAX_PLOT_POINTS = 300
 
 
-def cadence_features(t: np.ndarray) -> dict[str, float] | None:
-    """Interval statistics of frame times (ms), or None with no positive intervals."""
+def cadence_features(t: np.ndarray, excluded: np.ndarray | None = None) -> dict[str, float] | None:
+    """Interval statistics of frame times (ms), or None with no positive intervals. `excluded` (one per interval,
+    len(t) - 1) marks gaps the camera is not to blame for; they are left out and their longest is reported apart."""
     d = np.diff(np.asarray(t, dtype=np.float64))
-    d = d[np.isfinite(d) & (d > 0)]
-    if not len(d):
+    out = np.zeros(len(d), dtype=bool) if excluded is None else np.asarray(excluded, dtype=bool)
+    ok = np.isfinite(d) & (d > 0)
+    kept = d[ok & ~out]
+    if not len(kept):
         return None
-    median = float(np.median(d))
+    median = float(np.median(kept))
+    left_out = d[ok & out]
     return {
         "fps": 1000.0 / median,
-        "cv": float(np.std(d) / np.mean(d)),
-        "exact_share": float(np.mean(np.abs(d - median) <= 0.5)),
-        "longest_gap_ms": float(d.max()),
+        "cv": float(np.std(kept) / np.mean(kept)),
+        "exact_share": float(np.mean(np.abs(kept - median) <= 0.5)),
+        "longest_gap_ms": float(kept.max()),
+        "excluded_gaps": float(len(left_out)),
+        "longest_excluded_gap_ms": float(left_out.max()) if len(left_out) else 0.0,
     }
+
+
+def lost_in_upload(idx: np.ndarray) -> np.ndarray:
+    """Per interval: the frame numbers jump, so frames between were grabbed but never arrived."""
+    return np.diff(np.asarray(idx, dtype=np.int64)) > 1
+
+
+def hidden_page(t: np.ndarray, ctx: AnalysisContext, slack_ms: float = 250.0) -> np.ndarray:
+    """Per interval: the gap spans the scheduled start of a step skipped with "page_hidden". The client checks
+    `document.hidden` as each step is due, so the page was hidden then; `slack_ms` covers the scheduling lag."""
+    t = np.asarray(t, dtype=np.float64)
+    out = np.zeros(max(0, len(t) - 1), dtype=bool)
+    ch = ctx.bundle.challenge
+    if ch is None or len(t) < 2:
+        return out
+    steps = {s.step_id: s for s in ch.steps if isinstance(s, ColourStep | TurnStep)}
+    for e in ctx.bundle.events:
+        step = steps.get(e.step_id)
+        if e.status != "skipped" or e.skip_reason != "page_hidden" or step is None:
+            continue
+        due = ch.baseline_ms + step.start_offset_ms
+        out |= (t[:-1] <= due + slack_ms) & (t[1:] >= due - slack_ms)
+    return out
 
 
 def duplicate_runs(dup: np.ndarray) -> int:
@@ -57,11 +90,15 @@ def _cadence_plot(t: np.ndarray) -> Plot:
 def _cadence(ctx: AnalysisContext) -> CheckResult:
     p = ctx.thresholds.params(CADENCE.check_id)
     min_frames = int(p.get("min_frames", 30))
-    f = cadence_features(ctx.t) if ctx.n >= min_frames else None
+    idx = np.array([m.idx for m in ctx.bundle.frames], dtype=np.int64)
+    lost = lost_in_upload(idx) if len(idx) == ctx.n else np.zeros(max(0, ctx.n - 1), dtype=bool)
+    hidden = hidden_page(ctx.t, ctx)
+    f = cadence_features(ctx.t, lost | hidden) if ctx.n >= min_frames else None
     if f is None:
         return abstain(*_ids(CADENCE), ["quality.low_fps"],
                        f"Only {ctx.n} frames arrived; at least {min_frames} are needed to judge the frame timing.")
     max_gap = float(p.get("max_gap_ms", 1000))
+    f["frames_missing"] = float(np.sum(np.diff(idx)[lost] - 1)) if lost.any() else 0.0
     regular = (f["exact_share"] > float(p.get("too_regular_share", 0.98))
                and f["cv"] < float(p.get("too_regular_cv", 0.01)))
     if f["longest_gap_ms"] > max_gap:
@@ -76,6 +113,16 @@ def _cadence(ctx: AnalysisContext) -> CheckResult:
         risk, reasons = 0.0, []
         explanation = (f"{f['fps']:.1f} fps with an interval spread of {f['cv']:.1%} and a longest gap of "
                        f"{f['longest_gap_ms']:.0f} ms, consistent with a physical camera.")
+    if f["longest_excluded_gap_ms"] > max_gap:  # noted, never scored: the camera is not to blame
+        why = []
+        if lost.any():
+            why.append(f"{f['frames_missing']:.0f} frames lost in upload")
+            reasons = [*reasons, "quality.frames_missing"]
+        if hidden.any():
+            why.append("the page hidden")
+            reasons = [*reasons, "quality.page_hidden"]
+        explanation += (f" A {f['longest_excluded_gap_ms']:.0f} ms gap is left out of the timing "
+                        f"({' and '.join(why)}), not counted as a stall.")
     return result(*_ids(CADENCE), risk=risk, flag_at=ctx.thresholds.flag_at(CADENCE.check_id, 0.6), quality=1.0,
                   features=f, reasons=reasons, explanation=explanation,
                   source=ctx.thresholds.source(CADENCE.check_id), window_id="all", plot=_cadence_plot(ctx.t),

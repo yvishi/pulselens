@@ -18,6 +18,9 @@ REASON_TEXT: dict[str, str] = {
     "quality.neck_hidden": "The neck was not visible enough to compare with the face.",
     "quality.moving": "The face moved too much to measure.",
     "quality.clipped": "Parts of the face or neck were overexposed.",
+    "quality.frames_missing": "Some video frames were lost on the way to the server; that gap is not held against "
+                              "the camera.",
+    "quality.page_hidden": "The page was in the background for a while, so no video arrived then.",
     # family B: sensor and stream (G4, G8)
     "sensor.stall": "The video stopped for more than a second.",
     "sensor.too_regular": "Frames arrived on a perfectly regular clock, unlike a physical camera.",

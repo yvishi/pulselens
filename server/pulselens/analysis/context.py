@@ -42,14 +42,6 @@ class AnalysisContext:
         return len(self.t)
 
 
-def read_frame(bundle: Bundle, idx: int) -> np.ndarray | None:
-    """Bundle.read_frame, but None instead of an exception: cv2.imdecode raises on a 0-byte file (issue for Keshav)."""
-    try:
-        return bundle.read_frame(idx)
-    except Exception:  # noqa: BLE001 -- an unreadable frame is a missing frame
-        return None
-
-
 def _num(x: Any) -> float:
     return float(x) if isinstance(x, int | float) and np.isfinite(x) else np.nan
 
@@ -69,7 +61,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     prev: tuple[int, np.ndarray] | None = None
     frame_w = 0
     for i, meta in enumerate(bundle.frames):
-        img = read_frame(bundle, meta.idx)
+        img = bundle.read_frame(meta.idx)
         if img is None:
             continue
         readable[i] = True
