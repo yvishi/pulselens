@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from pulselens.config import load_config
-from pulselens.contracts import Decision, Plan, SessionCreate
+from pulselens.contracts import AgentDecision, Decision, Plan, SessionCreate
 from pulselens.engine import audit
 from pulselens.engine.fusion import fuse
 from pulselens.engine.planner import make_challenge, rng_for_nonce
@@ -52,3 +52,23 @@ def test_save_analysis_writes_both_files_audits_and_finishes(tmp_path: Path) -> 
     assert list(folder.glob("*.tmp")) == []
     assert audit.verify(folder) == (True, None)
 
+
+def test_record_agent_saves_and_audits(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "data")
+    sid = store.create(SessionCreate()).session_id
+
+    store.record_agent(sid, AgentDecision(action="escalate", note="check ID"))
+
+    folder = store.path(sid)
+    assert json.loads((folder / "agent.json").read_text(encoding="utf-8")) == {"action": "escalate", "note": "check ID"}
+    rows = [json.loads(line) for line in (folder / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[-1]["type"] == "agent.action"
+    assert audit.verify(folder) == (True, None)
+    assert list(folder.glob("*.tmp")) == []
+
+
+def test_only_the_store_writes_audit_lines():
+    root = Path(__file__).resolve().parents[2] / "pulselens"
+    users = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
+                   if "engine import audit" in p.read_text(encoding="utf-8") and p.name != "audit.py")
+    assert users == ["engine/store.py"]
