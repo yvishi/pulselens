@@ -90,6 +90,10 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     clean_share = float(inside.sum() / len(grid))
     face_g = np.column_stack([np.interp(grid, tg, face[good][:, c]) for c in range(3)])
     neck_g = np.column_stack([np.interp(grid, tg, neck[good][:, c]) for c in range(3)])
+    if min(float(np.std(face_g[:, 1] / face_g[:, 1].mean())), float(np.std(neck_g[:, 1] / neck_g[:, 1].mean()))) < 1e-4:
+        return [abstain(SPEC, ["pulse.not_measured"], f"The face or neck did not change at all over {seconds:.0f} s "
+                        f"(identical frames), so there is no pulse to compare. {CAVEAT}",
+                        features={"seconds": seconds}, window_id="all")]
     snr, coherence = snr_and_coherence(pos(face_g, fs), pos(neck_g, fs), fs)
     features = {"snr_face": snr, "coherence_face_neck": coherence, "seconds": seconds,
                 "clean_share": min(1.0, clean_share)}

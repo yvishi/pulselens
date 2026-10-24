@@ -19,6 +19,11 @@ drops out for part of a turn that was clearly followed is not held against the p
 4. otherwise the turn was not performed (or only partly): abstain `turn.not_performed`, because a genuine person may
    simply not have turned, and fusion's coverage rule handles a missing family.
 A start under 150 ms after the prompt adds `turn.too_fast`, measured, not scored, until data says otherwise.
+
+Before all of these: a frozen head is usable, risk 1, `turn.frozen`. A live head always moves a little while sitting
+still; a still image or a looped frame does not. Frozen = the yaw over every face frame before the prompt spans less
+than `frozen_deg` (5th to 95th percentile), over at least `frozen_min_frames` frames. S2: 16 genuine webcam sessions
+spanned 0.55-37 degrees; a still image through OBS Virtual Camera spanned 0.05.
 """
 
 from __future__ import annotations
@@ -94,6 +99,15 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [abstain(SPEC, ["quality.no_face"], "The face was not found just before the turn prompt, so there is "
                         "no starting angle to compare with.", window_id=step.step_id)]
     yaw0 = float(np.median(yaw[before]))
+    pre = (t < painted) & np.isfinite(yaw)
+    if pre.sum() >= int(ctx.thresholds.param(SPEC.check_id, "frozen_min_frames")):
+        spread = float(np.percentile(yaw[pre], 95) - np.percentile(yaw[pre], 5))
+        if spread < float(ctx.thresholds.param(SPEC.check_id, "frozen_deg")):
+            return [result(SPEC, ctx.thresholds, risk=1.0, quality=1.0,
+                           features={"yaw_spread_deg": spread, "frames": int(pre.sum())}, reasons=["turn.frozen"],
+                           explanation=f"The head did not move at all before the prompt (yaw within {spread:.2f} "
+                                       f"degrees over {int(pre.sum())} frames); a live head always moves a little, a "
+                                       "still image or a looped frame does not.", window_id=step.step_id)]
     in_win = (t >= painted) & (t <= end)
     if not in_win.any():
         return [abstain(SPEC, ["quality.low_fps"], "No frames arrived during the turn.", window_id=step.step_id)]
