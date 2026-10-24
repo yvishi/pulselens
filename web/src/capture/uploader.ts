@@ -1,7 +1,7 @@
 /**
  * Batched frame upload (CONTRACT section 2, row 5). Every batchMs the head of the queue (<= 30 frames) goes out as
- * one multipart postFrames call. The queue holds <= 90 frames; on overflow the oldest is dropped and counted, so
- * capture never blocks. One batch is in flight at a time, in idx order.
+ * one multipart postFrames call. The queue holds <= 600 frames; on overflow the oldest is dropped and counted, so
+ * capture never blocks. One batch is in flight at a time, in idx order; a backlog drains in back-to-back batches.
  *
  * Retries: a batch keeps its batch_seq on every attempt and is retried twice (500 ms apart) only after a network
  * error, a 5xx or a timeout, never after a 4xx. A 409 `session_complete` on a retry means an earlier attempt did
@@ -37,10 +37,11 @@ export interface UploaderStats {
 }
 
 export const MAX_BATCH = 30;
-export const MAX_QUEUE = 90;
+/** ~20 s at 30 fps: a stalled attempt plus its retries must not overflow it (the server caps a session at 900). */
+export const MAX_QUEUE = 600;
 export const RETRIES = 2;
 export const RETRY_BACKOFF_MS = 500;
-export const ATTEMPT_TIMEOUT_MS = 10_000;
+export const ATTEMPT_TIMEOUT_MS = 5_000;
 
 class Timeout extends Error {}
 
@@ -131,6 +132,8 @@ export class FrameUploader {
       this.busy = false;
     }
     this.opts.onStats?.(this.stats());
+    // A backlog (after a slow or retried batch) goes out back-to-back, still one at a time, until it is under a batch.
+    if (!this.stopped && this.queue.length >= MAX_BATCH) this.enqueueSend();
   }
 
   /** True once the server has the batch. The same meta (and batch_seq) goes out on every attempt. */
