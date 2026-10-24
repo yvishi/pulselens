@@ -47,10 +47,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     model = sbi.get_model()
     if model is None:
         return [abstain(SPEC, ["visual.model_missing"], "SBI weights not installed.", window_id="all")]
-    p = ctx.thresholds.params(SPEC.check_id)
-    n, min_crops, top_k = int(p.get("crops", 8)), int(p.get("min_crops", 4)), int(p.get("top_k", 3))
+    n = int(ctx.thresholds.param(SPEC.check_id, "crops"))
+    min_crops = int(ctx.thresholds.param(SPEC.check_id, "min_crops"))
+    top_k = int(ctx.thresholds.param(SPEC.check_id, "top_k"))
     crops = []
-    for i in pick_frames(ctx, n, float(p.get("frontal_deg", 20))):
+    for i in pick_frames(ctx, n, float(ctx.thresholds.param(SPEC.check_id, "frontal_deg"))):
         img = ctx.bundle.read_frame(ctx.bundle.frames[i].idx)
         if img is not None:
             crops.append(sbi.crop(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), tuple(ctx.face_box[i])))
@@ -59,7 +60,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                         f"(need {min_crops}).", features={"crops": len(crops)}, window_id="all")]
     scores = np.sort(model.score(crops))[::-1]
     top = float(np.mean(scores[:top_k]))
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
+    flag_at = ctx.thresholds.flag_at(SPEC.check_id)
     features = {"sbi_mean": float(np.mean(scores)), "sbi_top3": top, "sbi_max": float(scores[0]),
                 "crops": len(crops)}
     explanation = (f"The detector scored the face {top:.2f} (mean of the top {min(top_k, len(scores))} of "

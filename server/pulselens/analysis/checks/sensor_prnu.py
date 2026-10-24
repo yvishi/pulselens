@@ -24,7 +24,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [abstain(SPEC, ["quality.too_few_frames"], f"Fewer than {MIN_FRAMES} frames with a mean brightness "
                         f"between {LUMA_RANGE[0]} and {LUMA_RANGE[1]} to estimate the sensor pattern.",
                         window_id="all")]
-    limit = float(ctx.thresholds.params(SPEC.check_id).get("min_pce", 50))
+    limit = float(ctx.thresholds.param(SPEC.check_id, "min_pce"))
     low = fp.pce < limit
     explanation = (f"No stable sensor pattern: PCE {fp.pce:.1f} (limit {limit:.0f}) over {fp.frames} frames"
                    if low else

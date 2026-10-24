@@ -28,7 +28,6 @@ from pulselens.contracts import CheckResult, ColourStep, TurnStep
 SPEC = specs.SENSOR_REGIONS
 HYPOTHESIS = "A hypothesis: a repainted face may be smoother or noisier than the real neck."
 BEFORE_STEP_MS, AFTER_STEP_MS = 100.0, 400.0
-TURN_TAIL_MS = 500.0
 EPS = 1e-6  # two perfectly clean regions compare as equal, not as 0/0
 
 
@@ -45,7 +44,8 @@ def still_frames(ctx: AnalysisContext) -> np.ndarray:
         if isinstance(step, ColourStep):
             end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.dwell_ms) + AFTER_STEP_MS
         elif isinstance(step, TurnStep):
-            end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms) + TURN_TAIL_MS
+            tail = float(ctx.thresholds.param(specs.TURN_FOLLOW.check_id, "tail_ms"))
+            end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms) + tail
         else:
             continue
         keep &= ~((t >= e.painted_t_ms - BEFORE_STEP_MS) & (t <= end))
@@ -68,8 +68,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                        ("quality.clipped", "parts of the picture were overexposed")):
         if code in overall.reasons:
             return [abstain(SPEC, [code], f"The noise of the face could not be compared: {what}.", window_id="all")]
-    p = ctx.thresholds.params(SPEC.check_id)
-    min_q = int(p.get("min_jpeg_quality", 80))
+    min_q = int(ctx.thresholds.param(SPEC.check_id, "min_jpeg_quality"))
     if ctx.jpeg_quality is not None and ctx.jpeg_quality < min_q:
         return [abstain(SPEC, ["quality.heavy_compression"], f"The video was compressed too heavily (JPEG quality "
                         f"about {ctx.jpeg_quality}, need {min_q}) to compare the sensor noise of the face and neck.",
@@ -78,7 +77,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     if not noise:
         return [abstain(SPEC, ["quality.too_few_frames"], "No region texture was measured.", window_id="all")]
     still = still_frames(ctx) & np.isfinite(noise["face"])
-    min_frames = int(p.get("min_frames", 20))
+    min_frames = int(ctx.thresholds.param(SPEC.check_id, "min_frames"))
     n_still = int(still.sum())
     if n_still < min_frames:
         return [abstain(SPEC, ["quality.too_few_frames"], f"Only {n_still} still frames with a face (need "
@@ -95,10 +94,10 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     if face_neck is None or not scored:
         return [abstain(SPEC, ["quality.neck_hidden"], "The neck's noise could not be measured on the still frames.",
                         features=features, window_id="all")]
-    tol = float(p.get("ratio_log_tolerance", 0.916))
+    tol = float(ctx.thresholds.param(SPEC.check_id, "ratio_log_tolerance"))
     excess = max(abs(math.log(r)) for r in scored) - tol
-    risk = max(0.0, excess) / float(p.get("ratio_log_scale", 0.693))
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
+    risk = max(0.0, excess) / float(ctx.thresholds.param(SPEC.check_id, "ratio_log_scale"))
+    flag_at = ctx.thresholds.flag_at(SPEC.check_id)
     limit = math.exp(tol)
     bg = f" and {face_bg:.2f}x the background's" if face_bg is not None else ""
     explanation = (f"The face's sensor noise was {face_neck:.2f}x the neck's{bg} over {n_still} still frames "

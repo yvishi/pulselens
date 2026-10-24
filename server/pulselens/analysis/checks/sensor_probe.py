@@ -39,9 +39,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                         "asked for, so it is recorded as unsupported, not failed.",
                         features={"requests": len(rows), "accepted": 0}, window_id="all")]
 
-    p = ctx.thresholds.params(SPEC.check_id)
-    unusual_size = tuple(int(x) for x in p.get("unusual_size", (1000, 750)))
-    max_switch = float(p.get("max_switch_ms", 150))
+    unusual_size = tuple(int(x) for x in ctx.thresholds.param(SPEC.check_id, "unusual_size"))
+    max_switch = float(ctx.thresholds.param(SPEC.check_id, "max_switch_ms"))
     working = (pf.width, pf.height)
     phantom = [r for r in accepted if r.switch_ms is None and r.delivered is not None
                and tuple(r.delivered) != tuple(r.requested[:2]) and tuple(r.delivered) == working]

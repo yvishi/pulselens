@@ -11,8 +11,10 @@ FRAME = 40.0  # ms
 PAINTED = 1000.0
 ENDED = PAINTED + 400
 
+A_MIN = 0.003  # echo.a_min in thresholds.yaml
 
-def onset(t, s, *, painted=PAINTED, ended=ENDED, colour=COLOUR, a_min=0.003):
+
+def onset(t, s, *, painted=PAINTED, ended=ENDED, colour=COLOUR, a_min=A_MIN):
     return echo_onset(t, s, painted, ended, colour, step_id="c0", region="skin", a_min=a_min)
 
 
@@ -134,14 +136,14 @@ def test_a_region_out_of_view_during_the_step_is_invalid() -> None:
 
 def test_response_follows_the_change_in_any_direction() -> None:
     t, s = series({1080.0: 0.02})
-    r = response(t, s, PAINTED, ENDED, COLOUR)
+    r = response(t, s, PAINTED, ENDED, COLOUR, a_min=A_MIN)
     assert r.responded and r.cosine == pytest.approx(1.0) and r.magnitude == pytest.approx(0.02)
     other = np.cross(direction(COLOUR), np.ones(3) / np.sqrt(3))  # in the chromaticity plane, at 90 degrees
     t, s = series({1080.0: 0.02}, d=other / np.linalg.norm(other))
-    r = response(t, s, PAINTED, ENDED, COLOUR)
+    r = response(t, s, PAINTED, ENDED, COLOUR, a_min=A_MIN)
     assert r.responded and r.cosine == pytest.approx(0.0, abs=1e-9)
     t, s = series({})
-    assert not response(t, s, PAINTED, ENDED, COLOUR).responded
+    assert not response(t, s, PAINTED, ENDED, COLOUR, a_min=A_MIN).responded
 
 
 @pytest.mark.parametrize("seed", range(25))
@@ -154,7 +156,7 @@ def test_echo_onset_and_response_never_raise_on_garbage(seed: int) -> None:
     painted = float(rng.uniform(-100, 2000))
     o = onset(t, s, painted=painted, ended=painted + 400)
     assert isinstance(o.valid, bool)
-    response(t, s, painted, painted + 400, COLOUR)
+    response(t, s, painted, painted + 400, COLOUR, a_min=A_MIN)
 
 
 def _noisy(s: np.ndarray, sigma: float, seed: int = 0):
