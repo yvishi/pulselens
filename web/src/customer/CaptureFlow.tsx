@@ -26,9 +26,9 @@ export interface CaptureFlowProps {
   /** extra data-* attributes on <main> */
   data?: Record<`data-${string}`, string | undefined>;
   /** replaces the default result screen (the CustomerStatus message) */
-  renderResult?: (state: CaptureState, lang: Lang) => ReactNode;
+  renderResult?: (state: Extract<CaptureState, { phase: "result" }>, lang: Lang) => ReactNode;
   /** replaces the default error screen */
-  renderError?: (state: CaptureState, lang: Lang) => ReactNode;
+  renderError?: (state: Extract<CaptureState, { phase: "error" }>, lang: Lang) => ReactNode;
 }
 
 /**
@@ -39,7 +39,7 @@ export interface CaptureFlowProps {
 export function CaptureFlow({ sessionId, token, className, data, renderResult, renderError }: CaptureFlowProps) {
   const [lang, setLang] = useState<Lang>(browserLang);
   const [state, setState] = useState<CaptureState>(
-    token ? { phase: "consent" } : { phase: "error", detail: "no_token" },
+    token ? { phase: "consent" } : { phase: "error", error: "no_token" },
   );
   const video = useRef<HTMLVideoElement>(null);
   const session = useRef<CaptureSession | null>(null);
@@ -69,7 +69,7 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
     void s.start(noFlashRequested); // called inside the click: the overlay may ask for fullscreen
   };
 
-  const { phase, detail, tips, agentQuestions, weakConnection } = state;
+  const { phase, tips, agentQuestions, weakConnection } = state;
   return (
     <main className={className ? `customer ${className}` : "customer"} data-phase={phase} lang={lang} {...data}>
       <video
@@ -94,9 +94,9 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
           {t("upload.weak", lang)}
         </p>
       )}
-      {phase === "result" &&
-        (renderResult ? renderResult(state, lang) : <Result lang={lang} message={detail} agentQuestions={agentQuestions} />)}
-      {phase === "error" && (renderError ? renderError(state, lang) : <ErrorStep lang={lang} detail={detail} />)}
+      {state.phase === "result" &&
+        (renderResult ? renderResult(state, lang) : <Result lang={lang} message={state.message} agentQuestions={agentQuestions} />)}
+      {state.phase === "error" && (renderError ? renderError(state, lang) : <ErrorStep lang={lang} error={state.error} />)}
     </main>
   );
 }

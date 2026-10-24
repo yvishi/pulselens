@@ -76,9 +76,9 @@ export function LabPage() {
             {operatorActions}
           </section>
         )}
-        renderError={({ detail }, lang) => (
+        renderError={({ error }, lang) => (
           <>
-            <ErrorStep lang={lang} detail={detail} />
+            <ErrorStep lang={lang} error={error} />
             <div lang="en">
               <p className="muted">Session id {rec.sessionId} (not complete)</p>
               {operatorActions}
