@@ -98,7 +98,7 @@ function SessionRow({ r, now }: { r: SessionSummary; now: number }) {
       </td>
       <td data-label="Applying for">{PRODUCT_PLAIN[r.product] ?? r.product}</td>
       <td data-label="Progress">
-        <span className={`progress progress-${r.state}`}>{STATE_PLAIN[r.state] ?? r.state}</span>
+        <span className={`run-state run-state-${r.state}`}>{STATE_PLAIN[r.state] ?? r.state}</span>
       </td>
       <td data-label="Check type">{r.mode ? MODE_PLAIN[r.mode] : <span className="muted">Not chosen yet</span>}</td>
       <td data-label="Result" className="cell-result">

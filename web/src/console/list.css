@@ -534,13 +534,13 @@
   letter-spacing: 0.03em;
 }
 
-.progress {
+.run-state {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
 }
 
-.progress::before {
+.run-state::before {
   content: "";
   flex: none;
   width: 0.55rem;
@@ -549,23 +549,23 @@
   background: var(--line);
 }
 
-.progress-preflight::before,
-.progress-capturing::before,
-.progress-analysing::before {
+.run-state-preflight::before,
+.run-state-capturing::before,
+.run-state-analysing::before {
   background: var(--stamp);
   animation: list-pulse 1.4s ease-in-out infinite;
 }
 
-.progress-created::before {
+.run-state-created::before {
   border: 2px solid var(--stamp);
   background: transparent;
 }
 
-.progress-done::before {
+.run-state-done::before {
   background: var(--ink-soft);
 }
 
-.progress-expired {
+.run-state-expired {
   color: var(--ink-soft);
 }
 
@@ -574,7 +574,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .progress::before {
+  .run-state::before {
     animation: none !important;
   }
 }

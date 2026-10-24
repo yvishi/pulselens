@@ -130,29 +130,90 @@ describe("ConsoleList", () => {
 });
 
 describe("ConsoleSession", () => {
-  beforeEach(() => sessionStorage.setItem("pulselens.agent_passcode", "pc"));
+  beforeEach(() => {
+    sessionStorage.setItem("pulselens.agent_passcode", "pc");
+    api.listSessions.mockResolvedValue([]);
+  });
 
   it("shows the outcome, honesty labels, plan reasons and families with failed and abstained apart", async () => {
     api.getResult.mockResolvedValue(REPORT);
     at("/console/d79105c5121a3cb3");
     const banner = await screen.findByRole("region", { name: "Outcome" });
     expect(banner.textContent).toContain("HUMAN REVIEW");
+    expect(within(banner).getByRole("heading", { level: 2 }).textContent).toBe("Needs your review");
+    expect(banner.textContent).toContain("What to do next");
     expect(banner.textContent).toContain("PulseLens recommends; the agent decides.");
     expect(screen.getByText("PROVISIONAL THRESHOLDS")).toBeTruthy();
     expect(screen.getByText("FAKE ANALYSIS")).toBeTruthy();
     expect(screen.getByText(/fewer frames than a full challenge needs/)).toBeTruthy();
     const b = screen.getByRole("region", { name: "Family B: Sensor and stream" });
-    expect(within(b).getByText("FLAG")).toBeTruthy();
+    expect(within(b).getByText("Problem found")).toBeTruthy();
     expect(within(b).getByText("Raised risk").parentElement!.textContent).toContain("72.4%");
     expect(within(b).getByText("Checked, no risk").parentElement!.textContent).toContain("FAKE ANALYSIS");
     const d = screen.getByRole("region", { name: "Family D: Visual and motion" });
-    expect(within(d).getByText("ABSTAINED")).toBeTruthy();
+    expect(within(d).getByText("Couldn't tell")).toBeTruthy();
     expect(within(d).getByText("Could not judge").parentElement!.textContent).toContain("lost during the turn");
     expect(within(d).queryByText("Raised risk")).toBeNull();
     const a = screen.getByRole("region", { name: "Family A: Pulse" });
     expect(a.textContent).toContain("not used in the decision");
     const timeline = screen.getByRole("region", { name: "Challenge timeline" });
     expect(timeline.textContent).toContain("1 skipped");
+    expect(timeline.textContent).toContain("the camera slowed down");
+    const checked = screen.getByRole("region", { name: "What PulseLens checked" });
+    expect(checked.textContent).toContain("Is it a real, live camera?");
+    expect(checked.textContent).toContain("Not checked");
+  });
+
+  it("shows the step-up in plain words and suggests the matching action", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "no_flash" } });
+    at("/console/d79105c5121a3cb3");
+    const banner = await screen.findByRole("region", { name: "Outcome" });
+    expect(banner.textContent).toContain("Try again");
+    expect(banner.textContent).toContain("Send a new link without flashing light.");
+    expect(banner.textContent).toContain("RETRY / STEP-UP");
+    const reverify = screen.getByRole("button", { name: "Re-verify" });
+    expect(reverify.closest(".choice")!.className).toContain("is-suggested");
+    expect(screen.getByRole("button", { name: "Approve" }).closest(".choice")!.className).not.toContain("is-suggested");
+  });
+
+  it("links to the newer and older sessions, from one fetch of the list", async () => {
+    const row = (id: string, ms: number): SessionSummary => ({
+      session_id: id, created_at_ms: ms, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null,
+    });
+    api.listSessions.mockResolvedValue([row("older1", 1000), row("d79105c5121a3cb3", 2000), row("newer1", 3000)]);
+    api.getResult.mockResolvedValue(REPORT);
+    at("/console/d79105c5121a3cb3");
+    expect((await screen.findByRole("link", { name: /Newer session/ })).getAttribute("href")).toBe("/console/newer1");
+    expect(screen.getByRole("link", { name: /Older session/ }).getAttribute("href")).toBe("/console/older1");
+    expect(screen.getByRole("link", { name: "Verifications" }).getAttribute("href")).toBe("/console");
+    expect(api.listSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables newer when this is the newest session", async () => {
+    api.listSessions.mockResolvedValue([
+      { session_id: "d79105c5121a3cb3", created_at_ms: 2000, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null },
+      { session_id: "older1", created_at_ms: 1000, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null },
+    ]);
+    api.getResult.mockResolvedValue(REPORT);
+    at("/console/d79105c5121a3cb3");
+    await screen.findByRole("link", { name: /Older session/ });
+    expect(screen.queryByRole("link", { name: /Newer session/ })).toBeNull();
+    expect(screen.getByText("← Newer session").getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("asks for confirmation before escalating to fraud", async () => {
+    api.getResult.mockResolvedValue(REPORT);
+    api.postAgentDecision.mockResolvedValue(undefined);
+    at("/console/d79105c5121a3cb3");
+    fireEvent.click(await screen.findByRole("button", { name: "Escalate to fraud" }));
+    expect(api.postAgentDecision).not.toHaveBeenCalled();
+    expect(screen.getByText("Escalate this customer to the fraud team?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("Escalate this customer to the fraud team?")).toBeNull();
+    expect(api.postAgentDecision).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Escalate to fraud" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm" })));
+    expect(api.postAgentDecision).toHaveBeenCalledWith("d79105c5121a3cb3", "pc", { action: "escalate", note: "" });
   });
 
   it("records an approval and refreshes", async () => {
@@ -168,7 +229,7 @@ describe("ConsoleSession", () => {
   it("re-verify creates the next attempt and shows its customer link", async () => {
     api.getResult.mockResolvedValue(REPORT);
     api.postAgentDecision.mockResolvedValue(undefined);
-    api.createSession.mockResolvedValue({ customer_url: "/customer/next?t=tok" });
+    api.createSession.mockResolvedValue({ session_id: "next", customer_url: "/customer/next?t=tok" });
     const { container } = at("/console/d79105c5121a3cb3");
     const reverify = await screen.findByRole("button", { name: "Re-verify" });
     await act(async () => fireEvent.click(reverify));
@@ -176,6 +237,8 @@ describe("ConsoleSession", () => {
     expect((await screen.findByRole("link", { name: /customer\/next/ })).getAttribute("href")).toContain("/customer/next?t=tok");
     expect(container.querySelector(".next-link canvas")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+    expect(screen.getByText("New link for the customer")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Watch the new attempt" }).getAttribute("href")).toBe("/console/next");
   });
 
   it("keeps the actions closed until a decision exists", async () => {
@@ -183,6 +246,7 @@ describe("ConsoleSession", () => {
     at("/console/d79105c5121a3cb3");
     expect((await screen.findByRole("button", { name: "Approve" })).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("region", { name: "Outcome" }).textContent).toContain("Analysing");
+    expect(screen.getByText("You can decide once the analysis has finished.")).toBeTruthy();
   });
 });
 
