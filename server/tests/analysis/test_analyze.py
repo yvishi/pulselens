@@ -135,3 +135,24 @@ def test_cli_prints_a_table(genuine: Path, capsys: pytest.CaptureFixture[str]) -
     assert cli([str(genuine), "--plots"]) == 0
     assert capsys.readouterr().out.strip()
     assert cli([str(genuine / "missing")]) == 2
+
+
+def test_cli_all_reports_crashes_abstains_and_time(synth, tmp_path: Path, monkeypatch, capsys) -> None:
+    import shutil
+
+    from pulselens import analysis
+    from pulselens.analysis.result import CheckSpec, guarded
+
+    shutil.copytree(synth.session(kind="genuine"), tmp_path / "a")
+    shutil.copytree(synth.session(kind="genuine", face_in_frames=False), tmp_path / "b")
+    (tmp_path / "not_a_session").mkdir()
+    broken = guarded(CheckSpec("test.broken", "D", "D.test"))(lambda ctx: 1 / 0)
+    monkeypatch.setattr(analysis, "CHECKS", (*analysis.CHECKS, broken))
+    assert cli([str(tmp_path), "--all"]) == 0
+    out = capsys.readouterr().out
+    assert "2 sessions (2 genuine); time per session" in out
+    assert "CRASHED  test.broken in 2 sessions: a, b" in out
+    assert "ABSTAINS light.response on 50%" not in out  # only above half
+    assert "ABSTAINS test.broken on 100% of genuine sessions" in out and "FLAGS" not in out
+    assert cli([str(tmp_path / "not_a_session"), "--all"]) == 0
+    assert "No sessions" in capsys.readouterr().out
