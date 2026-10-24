@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import colorsys
 import json
+import random
 from pathlib import Path
 from typing import Literal
 
@@ -36,6 +37,7 @@ from pulselens.contracts import (
     Preflight,
     TurnStep,
 )
+from pulselens.engine import planner
 
 Kind = Literal["genuine", "replay", "swap_no_face_echo", "virtual_camera"]
 
@@ -100,21 +102,26 @@ def landmarks_478(chin_y: float = 150.0) -> list[list[float]]:
 
 
 def make_challenge(session_id: str, nonce: str, *, n_colour: int, turn: Literal["left", "right"] | None,
-                   rng: np.random.Generator) -> Challenge:
-    c = load_config()["challenge"]
-    mode = c["capable"]
-    steps: list[ColourStep | TurnStep] = []
-    end = 0
-    for k, hue in enumerate(list(c["hues_deg"])[:n_colour]):
-        start = 0 if k == 0 else end + int(rng.integers(mode["gap_ms"][0], mode["gap_ms"][1] + 1))
-        steps.append(ColourStep(step_id=f"c{k}", hue_deg=int(hue), start_offset_ms=start, dwell_ms=mode["dwell_ms"]))
-        end = start + mode["dwell_ms"]
-    if turn is not None:
-        start = end + c["turn_gap_ms"] if steps else 0
-        steps.append(TurnStep(step_id="t0", direction=turn, start_offset_ms=start, duration_ms=mode["turn_ms"]))
-        end = start + mode["turn_ms"]
-    return Challenge(session_id=session_id, nonce=nonce, mode="CAPABLE", baseline_ms=c["baseline_ms"], steps=steps,
-                     total_ms=end + 500)
+                   rng: random.Random) -> Challenge:
+    """The engine's own CAPABLE challenge (engine.planner.make_challenge: hues, gaps and the tail come from there),
+    cut to the first `n_colour` colour steps and turned the way asked. Steps after a cut colour step move earlier by
+    the time it took, so the schedule stays the planner's."""
+    plan = Plan(mode="CAPABLE", run_light=n_colour > 0, run_turn=turn is not None, agent_questions=False,
+                reasons=["mode.capable.ok"])
+    ch = planner.make_challenge(plan, session_id, nonce, rng, load_config())
+    colour = [s for s in ch.steps if isinstance(s, ColourStep)]
+    kept = colour[:n_colour]
+    assert len(kept) == n_colour, f"the planner offers {len(colour)} colour steps"
+    cut = (colour[-1].start_offset_ms + colour[-1].dwell_ms if colour else 0) - (
+        kept[-1].start_offset_ms + kept[-1].dwell_ms if kept else 0)
+    steps: list[ColourStep | TurnStep] = list(kept)
+    for s in ch.steps:
+        if isinstance(s, TurnStep) and turn is not None:
+            start = s.start_offset_ms - cut if kept else 0
+            steps.append(s.model_copy(update={"direction": turn, "start_offset_ms": start}))
+    shift = cut if kept or turn is None else next(
+        (s.start_offset_ms for s in ch.steps if isinstance(s, TurnStep)), 0)
+    return ch.model_copy(update={"steps": steps, "total_ms": ch.total_ms - shift})
 
 
 def challenge_events(ch: Challenge) -> list[ChallengeEvent]:
@@ -217,7 +224,7 @@ def make_session(
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
-    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=rng)
+    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=random.Random(seed))
     events = challenge_events(ch)
 
     perfect = kind == "virtual_camera"
