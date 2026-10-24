@@ -155,3 +155,39 @@ def test_echo_onset_and_response_never_raise_on_garbage(seed: int) -> None:
     o = onset(t, s, painted=painted, ended=painted + 400)
     assert isinstance(o.valid, bool)
     response(t, s, painted, painted + 400, COLOUR)
+
+
+def _noisy(s: np.ndarray, sigma: float, seed: int = 0):
+    """Frames every 40 ms with projection `s` plus Gaussian noise of `sigma`, along the step colour's direction."""
+    t = np.arange(len(s)) * FRAME
+    s = s + np.random.default_rng(seed).normal(0, sigma, len(s))
+    rgb = (1.0 / 3.0 + s[:, None] * direction(COLOUR)[None, :]) * 3.0
+    return t, RegionSeries(rgb_linear=rgb, coverage=np.ones(len(s)))
+
+
+def test_a_drifting_baseline_makes_the_step_invalid() -> None:
+    # Issue #17: the colour was already moving before the step (a camera settling), so any "echo" is drift.
+    t = np.arange(60) * FRAME
+    t, s = _noisy(np.where(t < PAINTED, (t - 500) / 500 * 0.01, 0.01).clip(0), 0.0003)
+    o = onset(t, s)
+    assert not o.valid and o.reason == "baseline drifting"
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_a_steady_noisy_baseline_is_not_drift(seed: int) -> None:
+    t, s = _noisy(np.zeros(60), 0.002, seed)
+    assert onset(t, s).reason != "baseline drifting"
+
+
+def test_hold_z_sees_an_echo_below_the_onset_threshold() -> None:
+    # A 0.002 echo under the 0.003 floor: no onset, but the mean over the step is many standard errors up.
+    t = np.arange(60) * FRAME
+    t, s = _noisy(np.where((t >= PAINTED + 80) & (t <= ENDED + 80), 0.002, 0.0), 0.0004)
+    o = onset(t, s)
+    assert o.valid and o.onset_ms is None
+    assert o.hold_mean == pytest.approx(0.002, abs=0.0005) and o.hold_z > 5
+
+
+def test_hold_z_is_near_zero_without_an_echo() -> None:
+    zs = [onset(*_noisy(np.zeros(60), 0.001, seed)).hold_z for seed in range(40)]
+    assert abs(float(np.mean(zs))) < 0.6 and float(np.std(zs)) < 2.0

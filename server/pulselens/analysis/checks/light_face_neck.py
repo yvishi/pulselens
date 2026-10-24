@@ -7,7 +7,9 @@ weaker than the neck's. Per colour step, echo onsets and amplitudes for the face
   constant-fraction delay face - neck (reported only: one webcam frame, 64-96 ms, is longer than any lag limit);
 - neck only: the neck's echo is clear and the face is *clearly* silent. Silent needs a face threshold low enough to
   hear a quarter of the neck's echo (the weakest real face/neck ratio, exp(-ratio_log_tolerance)); otherwise the step
-  is unclear and counts for neither side (the old repo's fix, after a darker exposure-locked face was misread).
+  is unclear and counts for neither side (the old repo's fix, after a darker exposure-locked face was misread). A face
+  whose mean change over the step still pushes towards the colour shown (`faint_z` standard errors, echo.hold_z)
+  answered faintly, under weak light, and is unclear too (issue #17).
 Risk 1 when at least `neck_only_steps` (2) steps are neck only and they are at least half of the measured steps
 (kept from the old repo, so one odd step cannot flag a genuine person). Otherwise risk grows from |ln median ratio|
 beyond ln 4. Abstains when the neck is hidden or clipped, or with fewer than `min_pairs` (3) pairs.
@@ -62,6 +64,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     min_snr = float(p.get("min_snr", 2.0))
     tol = float(p.get("ratio_log_tolerance", 1.386))
     ratio_floor = math.exp(-tol)  # the weakest face/neck ratio a real face shows
+    faint_z = float(p.get("faint_z", 3.0))
     ratios, deltas = [], []
     neck_only = face_only = weak = unclear = poor = measured = 0
     events = colour_events(ctx)
@@ -86,7 +89,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
             deltas.append(f.onset_cf_ms - n.onset_cf_ms)
         elif n.onset_ms is not None and _clear(n, min_snr):
             audible = (f.threshold or 0.0) <= ratio_floor * (n.amplitude or 0.0)
-            if audible and (f.peak is None or f.peak < (f.threshold or 0.0)):
+            faint = f.hold_z is not None and f.hold_z >= faint_z
+            if audible and not faint and (f.peak is None or f.peak < (f.threshold or 0.0)):
                 measured += 1
                 neck_only += 1
             else:
