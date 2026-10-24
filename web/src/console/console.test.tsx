@@ -14,6 +14,7 @@ vi.mock("../api/client", async (orig) => ({ ...(await orig<typeof import("../api
 const { ApiError } = await import("../api/client");
 const { ConsoleList, visibleRows } = await import("./ConsoleList");
 const { ConsoleSession } = await import("./ConsoleSession");
+const { FamilyCard } = await import("./FamilyCard");
 const { pickEvidenceFrames } = await import("./EvidenceFrames");
 const { alignSeries } = await import("./CheckPlot");
 
@@ -179,6 +180,15 @@ describe("ConsoleSession", () => {
     at("/console/d79105c5121a3cb3");
     expect((await screen.findByRole("button", { name: "Approve" })).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("region", { name: "Outcome" }).textContent).toContain("Analysing");
+  });
+});
+
+describe("FamilyCard", () => {
+  it("says Analysing… and invents no state while there is no summary", () => {
+    render(<FamilyCard family="B" summary={null} results={[]} />);
+    const chip = screen.getByText("Analysing…");
+    expect(chip.className).toContain("state-pending");
+    expect(screen.getByRole("region", { name: "Family B: Sensor and stream" }).className).toContain("family-pending");
   });
 });
 
