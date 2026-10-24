@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -11,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from pulselens.api.main import create_app
 from pulselens.config import Settings
+from tests.engine.api import SyncExecutor
 
 PASS = {"X-Agent-Passcode": "agent-pc"}
 JPEG = b"\xff\xd8\xff\xd9"
@@ -22,7 +22,7 @@ PRE = {"user_agent": "t", "platform": "desktop", "browser": "b", "camera_label":
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     settings = Settings(agent_passcode="agent-pc", data_dir=tmp_path / "data", fake_analysis=True)
-    with TestClient(create_app(settings)) as c:
+    with TestClient(create_app(settings, executor=SyncExecutor())) as c:
         yield c
 
 
@@ -39,10 +39,6 @@ def run_session(client: TestClient, *, complete: bool = True) -> dict:
                     files={f"f{i}": (f"{i}.jpg", JPEG, "image/jpeg") for i in idxs})
     if complete:
         client.post(f"/api/sessions/{sid}/complete", headers=h)
-        for _ in range(100):
-            if client.get(f"/api/sessions/{sid}/result", headers=PASS).json()["decision"]:
-                break
-            time.sleep(0.02)
     return s
 
 

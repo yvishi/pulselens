@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import functools
 from collections.abc import AsyncIterator, Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -35,10 +35,12 @@ def create_app(
     runner: Runner | None = None,
     clock: Clock = _wall_ms,
     config: dict[str, Any] | None = None,
+    executor: Executor | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     config = config or load_config()
-    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")  # one runner per completed session
+    # one runner per completed session; tests pass a synchronous executor
+    executor = executor or ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
     analyze_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analyze")  # analyze() under its timeout
 
     @asynccontextmanager

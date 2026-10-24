@@ -17,6 +17,7 @@ from pulselens.contracts import ChallengeEvent, ColourStep, FrameMeta, Plan, Ses
 from pulselens.engine import fake_analysis
 from pulselens.engine.runner import choose_analyze, run_analysis
 from pulselens.engine.store import SessionStore
+from tests.engine.api import SyncExecutor
 
 JPEG = b"\xff\xd8\xff\xd9"
 
@@ -117,7 +118,7 @@ def test_choose_analyze(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_complete_runs_the_runner_end_to_end(tmp_path: Path) -> None:
     settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings, executor=SyncExecutor())) as client:
         s = client.post("/api/sessions", json={}).json()
         h = {"Authorization": f"Bearer {s['customer_token']}"}
         sid = s["session_id"]
@@ -133,11 +134,7 @@ def test_complete_runs_the_runner_end_to_end(tmp_path: Path) -> None:
             client.post(f"/api/sessions/{sid}/frames", headers=h, data={"meta": json.dumps(meta)},
                         files={f"f{i}": (f"{i}.jpg", JPEG, "image/jpeg") for i in idxs})
         assert client.post(f"/api/sessions/{sid}/complete", headers=h).status_code == 202
-        for _ in range(100):
-            status = client.get(f"/api/sessions/{sid}/status", headers=h).json()
-            if status["state"] == "done":
-                break
-            time.sleep(0.02)
+        status = client.get(f"/api/sessions/{sid}/status", headers=h).json()
     assert status == {"state": "done", "message": "continue"}
     decision = json.loads((tmp_path / "data" / sid / "decision.json").read_text())
     assert decision["outcome"] == "PASS" and decision["provisional"]

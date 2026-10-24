@@ -6,7 +6,6 @@ import hashlib
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -14,6 +13,7 @@ from fastapi.testclient import TestClient
 from pulselens.api.main import create_app
 from pulselens.config import Settings
 from pulselens.engine.audit import GENESIS, append, canonical_json, verify
+from tests.engine.api import SyncExecutor
 
 
 def _lines(session_dir: Path) -> list[dict]:
@@ -135,7 +135,7 @@ def test_api_flow_writes_events_in_order(tmp_path: Path) -> None:
                         files={f"f{i}": (f"{i}.jpg", jpeg, "image/jpeg") for i in idxs})
         assert r.status_code == 204, r.text
 
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings, executor=SyncExecutor())) as client:
         s = client.post("/api/sessions", json={}).json()
         sid = s["session_id"]
         h = {"Authorization": f"Bearer {s['customer_token']}"}
@@ -148,12 +148,7 @@ def test_api_flow_writes_events_in_order(tmp_path: Path) -> None:
                "shown_rgb": [0.6, 0.5, 0.3]}]
         assert client.post(f"/api/sessions/{sid}/events", headers=h, json=ev).status_code == 204
         assert client.post(f"/api/sessions/{sid}/complete", headers=h).status_code == 202
-        for _ in range(100):
-            if client.get(f"/api/sessions/{sid}/result", headers=agent).json()["decision"]:
-                break
-            time.sleep(0.02)
-        else:
-            raise AssertionError("no decision")
+        assert client.get(f"/api/sessions/{sid}/result", headers=agent).json()["decision"]
         assert client.post(f"/api/sessions/{sid}/agent", headers=agent, json={"action": "approve"}).status_code == 204
 
     folder = tmp_path / "data" / sid
