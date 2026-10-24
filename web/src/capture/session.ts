@@ -5,7 +5,8 @@
  * on a LightOverlay (exposure locked around it behind ?lock=1) -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
  *
  * The server's plan decides what runs: a NO_FLASH plan (or run_light false) gets a challenge with no colour steps,
- * so nothing is painted and only the turn runs; the agent then asks a few questions.
+ * so nothing is painted and only the turn runs (then, with challenge.extra_prompts, the nod and the digits read aloud,
+ * which need no flash); the agent then asks a few questions.
  * completeSession is never called while a frame batch is in flight (the uploader is flushed or stopped first).
  *
  * Hardening (Y9): an fps drop (< 12 fps over the last 2 s) skips the remaining colour steps ("fps_drop"), never the
@@ -26,6 +27,9 @@ import { sleep } from "./flash";
 import { FrameGrabber, type GrabberOptions, type GrabberStats } from "./grabber";
 import { LightOverlay, chooseOverlayMode, type OverlayMode } from "./overlay";
 import { createFaceTracker, type FaceTracker } from "./face";
+import {
+  DEFAULT_DIGIT_TEXT, DEFAULT_NOD_TEXT, textDigitPrompt, textNodPrompt, type DigitPromptFactory, type NodPromptFactory,
+} from "./livePrompts";
 import { lockForLight, shouldLock, type CameraLock } from "./lock";
 import { PREFLIGHT_MS, runPreflight } from "./preflight";
 import { withRetries } from "./retry";
@@ -120,6 +124,12 @@ export interface CaptureSessionOptions {
   turnPrompt?: TurnPromptFactory;
   /** turn prompt text per direction (customer strings) */
   turnText?: (dir: TurnDirection) => string;
+  /** builds the nod and digit prompts (challenge.extra_prompts; default: text on the overlay) */
+  nodPrompt?: NodPromptFactory;
+  digitPrompt?: DigitPromptFactory;
+  /** the nod and digit prompt texts (customer strings) */
+  nodText?: () => string;
+  digitText?: () => string;
   deps?: Partial<CaptureSessionDeps>;
 }
 
@@ -307,11 +317,18 @@ export class CaptureSession {
     const showTurnPrompt = (this.opts.turnPrompt ?? textTurnPrompt)({
       overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT, faceTracker: d.faceTracker,
     });
+    const live = {
+      overlay, video, nodText: this.opts.nodText ?? (() => DEFAULT_NOD_TEXT),
+      digitText: this.opts.digitText ?? (() => DEFAULT_DIGIT_TEXT),
+    };
+    const showNodPrompt = (this.opts.nodPrompt ?? textNodPrompt)(live);
+    const showDigitPrompt = (this.opts.digitPrompt ?? textDigitPrompt)(live);
     const fpsDrop = fpsDropSkip(grabber);
     const shouldSkipLight = () =>
       (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ?? fpsDrop() ?? null;
     try {
-      return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight });
+      return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight, showNodPrompt,
+        showDigitPrompt });
     } finally {
       await lock?.restore();
       grabber.stop();

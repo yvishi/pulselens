@@ -2,12 +2,14 @@
  * Runs a server Challenge on the device (CONTRACT section 3): neutral grey for baseline_ms, then each step at its
  * start_offset_ms after the baseline. Steps are scheduled from t0 (t0 + baseline_ms + start_offset_ms), so setup
  * between t0 and this call does not shift them and they line up with the server's scheduled step windows. A colour step paints, holds for dwell_ms and clears; a turn step hands over
- * to showTurnPrompt. Every colour change goes through a FlashLimiter (>= 334 ms apart, so <= 3 per second).
+ * to showTurnPrompt, a nod step to showNodPrompt and a digit step to showDigitPrompt (challenge.extra_prompts).
+ * Every colour change goes through a FlashLimiter (>= 334 ms apart, so <= 3 per second).
  */
 import type { Challenge, ChallengeEvent, ColourStep } from "../contracts";
 import { now } from "./clock";
 import { isoluminantColour } from "./colour";
 import { FlashLimiter, sleep } from "./flash";
+import type { ShowDigitPrompt, ShowNodPrompt } from "./livePrompts";
 import type { LightOverlay } from "./overlay";
 
 /** What runChallenge needs from the overlay (LightOverlay, or a fake in tests). */
@@ -21,6 +23,10 @@ export interface ChallengeDeps {
   showTurnPrompt: (dir: "left" | "right", durationMs: number) => Promise<{ painted: number; ended: number }>;
   /** A reason to skip the next colour step ("fps_drop", "page_hidden") or null. */
   shouldSkipLight: () => string | null;
+  /** Shows the nod prompt (challenge.extra_prompts); without it a nod step is reported skipped ("no_prompt"). */
+  showNodPrompt?: ShowNodPrompt;
+  /** Shows one digit to read aloud; without it a digit step is reported skipped ("no_prompt"). */
+  showDigitPrompt?: ShowDigitPrompt;
 }
 
 /** The fps-drop downgrade (Y9): below 12 fps over the last 2 s, the remaining colour steps are skipped. */
@@ -69,6 +75,18 @@ export async function runChallenge(ch: Challenge, deps: ChallengeDeps): Promise<
       const { painted, ended } = await deps.showTurnPrompt(step.direction, step.duration_ms);
       events.push({ step_id: step.step_id, status: "shown", painted_t_ms: painted, ended_t_ms: ended, shown_rgb: null,
         skip_reason: null });
+      continue;
+    }
+    if (step.kind === "nod" || step.kind === "digit") {
+      // Like the turn: never skipped for fps or a hidden page (no flash); the server judges what happened.
+      const shown = step.kind === "nod"
+        ? await deps.showNodPrompt?.(step.duration_ms)
+        : await deps.showDigitPrompt?.(step.digit, step.duration_ms);
+      events.push(shown
+        ? { step_id: step.step_id, status: "shown", painted_t_ms: shown.painted, ended_t_ms: shown.ended, shown_rgb: null,
+          skip_reason: null }
+        : { step_id: step.step_id, status: "skipped", painted_t_ms: null, ended_t_ms: null, shown_rgb: null,
+          skip_reason: "no_prompt" });
       continue;
     }
     const reason = deps.shouldSkipLight();

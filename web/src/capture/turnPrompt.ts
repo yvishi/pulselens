@@ -54,7 +54,7 @@ export function raiseSelfView(video: HTMLVideoElement): () => void {
  * durationMs, hide it (show's return) and put the self-view back, wait two frames (ended). Times are ms since t0.
  */
 export async function runPrompt(
-  ctx: TurnPromptContext,
+  ctx: Pick<TurnPromptContext, "overlay" | "video">,
   durationMs: number,
   show: () => () => void,
 ): Promise<{ painted: number; ended: number }> {

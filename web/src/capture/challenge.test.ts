@@ -148,6 +148,50 @@ describe("runChallenge", () => {
   });
 });
 
+describe("runChallenge: nod and digits (challenge.extra_prompts)", () => {
+  const steps: Step[] = [
+    { kind: "turn", step_id: "t0", direction: "right", start_offset_ms: 0, duration_ms: 1000 },
+    { kind: "nod", step_id: "n0", start_offset_ms: 2000, duration_ms: 2500 },
+    { kind: "digit", step_id: "d0", digit: 7, start_offset_ms: 5500, duration_ms: 1200 },
+    { kind: "digit", step_id: "d1", digit: 2, start_offset_ms: 7300, duration_ms: 1200 },
+  ];
+  const prompt = (t0: number) => async (ms: number) => {
+    const painted = now() - t0;
+    await new Promise((r) => setTimeout(r, ms));
+    return { painted, ended: now() - t0 };
+  };
+
+  it("hands the nod and each digit to their prompts, on schedule, and reports them shown", async () => {
+    const t0 = now();
+    const showNodPrompt = vi.fn(prompt(t0));
+    const digit = prompt(t0);
+    const showDigitPrompt = vi.fn((_d: number, ms: number) => digit(ms));
+    const p = runChallenge(challenge(steps), {
+      overlay: fakeOverlay(), t0, showTurnPrompt: async () => ({ painted: 0, ended: 0 }),
+      shouldSkipLight: () => "fps_drop", showNodPrompt, showDigitPrompt, // an fps drop never skips them
+    });
+    await vi.runAllTimersAsync();
+    const events = await p;
+    expect(events.map((e) => [e.step_id, e.status])).toEqual([["t0", "shown"], ["n0", "shown"], ["d0", "shown"],
+      ["d1", "shown"]]);
+    expect(showNodPrompt).toHaveBeenCalledWith(2500);
+    expect(showDigitPrompt.mock.calls).toEqual([[7, 1200], [2, 1200]]);
+    events.slice(1).forEach((e, k) => {
+      expect(e.painted_t_ms!).toBeGreaterThanOrEqual(1000 + steps[k + 1]!.start_offset_ms);
+      expect(e.ended_t_ms! - e.painted_t_ms!).toBeGreaterThanOrEqual(steps[k + 1]!.kind === "nod" ? 2500 : 1200);
+      expect(e.shown_rgb).toBeNull();
+    });
+  });
+
+  it("without the prompts, the steps are reported skipped (no_prompt), never left out", async () => {
+    const { events } = await run(challenge(steps));
+    expect(events!.map((e) => [e.step_id, e.status, e.skip_reason])).toEqual([
+      ["t0", "shown", null], ["n0", "skipped", "no_prompt"], ["d0", "skipped", "no_prompt"],
+      ["d1", "skipped", "no_prompt"],
+    ]);
+  });
+});
+
 describe("isRedHue", () => {
   it("covers [345, 360) and [0, 15] only", () => {
     expect([345, 359.9, 0, 15, 720].map(isRedHue)).toEqual([true, true, true, true, true]);

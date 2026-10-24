@@ -8,6 +8,7 @@ import { CameraIcon, FaceInFrame, LockIcon, WeakSignalIcon } from "./steps/Art";
 import { Coaching } from "./steps/Coaching";
 import { Consent, LangToggle } from "./steps/Consent";
 import { ErrorStep } from "./steps/ErrorStep";
+import { cardDigitPrompt, cardNodPrompt } from "./steps/LivePrompts";
 import { Progress, stepOf } from "./steps/Progress";
 import { Result } from "./steps/Result";
 import { Status, Waiting } from "./steps/Status";
@@ -66,6 +67,10 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
       sessionId, token, video: video.current, overlayRoot: document.body, onState: setState,
       turnText: (dir) => t(turnKey(dir), lang),
       turnPrompt: ringTurnPrompt(),
+      nodText: () => t("nod.prompt", lang),
+      digitText: () => t("digit.prompt", lang),
+      nodPrompt: cardNodPrompt(),
+      digitPrompt: cardDigitPrompt(),
     });
     session.current = s;
     void s.start(noFlashRequested); // called inside the click: the overlay may ask for fullscreen
