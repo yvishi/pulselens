@@ -3,6 +3,7 @@
 Only Keshav (and Keshav's agent) edits this file. Newest notes first in each section.
 
 ## Tasks
+- [x] Plan-vs-built doc: `docs/PLAN_VS_BUILT.md` provides detailed accounting across Yash, Keshav, and Ganeev tracks, cut list reconciliation, and verification status (Criterion 5). 2026-10-24.
 - [x] Walkthrough doc: `docs/WALKTHROUGH.md` covers pipeline from input -> integrity -> checks -> fusion -> console with file pointers and privacy boundaries (Criterion 3). 2026-10-24.
 - [x] Delete raw frames on decision: `SessionStore` deletes `folder/frames` for unlabelled (/customer) sessions when agent decides, preserving lab sessions. Appends audit event `frames.deleted`, verified by audit; `frame_count` fallback to `frames.jsonl`. 4 tests in `test_store.py` and `test_audit.py`. 2026-10-24.
 - [x] Video ingest script: `scripts/ingest_video.py` converts judge video clips into real session bundles, matches challenges, runs full analysis, writes audit chain, and displays on console. 3 tests in `test_ingest_video.py`. 2026-10-24.
