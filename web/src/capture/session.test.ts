@@ -133,7 +133,7 @@ describe("CaptureSession", () => {
       "getStatus", "getStatus", "getStatus", "grabber.close",
     ]);
     expect(phases()).toEqual(["camera", "preflight", "challenge", "uploading", "waiting", "result"]);
-    expect(states.at(-1)).toMatchObject({ phase: "result", detail: "continue" });
+    expect(states.at(-1)).toMatchObject({ phase: "result", message: "continue" });
     expect(st.grabberOpts()).toMatchObject({ size: [640, 480], t0: 1234 });
   });
 
@@ -182,7 +182,7 @@ describe("CaptureSession", () => {
     const { s, states } = session(st.deps);
     await s.start(false);
     expect(states.map((x) => x.phase)).toEqual(["camera", "error"]);
-    expect(states.at(-1)!.detail).toBe("camera_denied");
+    expect(states.at(-1)).toMatchObject({ phase: "error", error: "camera_denied" });
     expect(st.deps.runPreflight).not.toHaveBeenCalled();
   });
 
@@ -191,7 +191,7 @@ describe("CaptureSession", () => {
     st.deps.api.getChallenge = vi.fn(async () => { throw new ApiError(410, "session_expired"); });
     const { s, states } = session(st.deps);
     await s.start(false);
-    expect(states.at(-1)).toEqual({ phase: "error", detail: "expired" });
+    expect(states.at(-1)).toEqual({ phase: "error", error: "expired" });
     expect(st.log).toContain("stopCamera");
   });
 
@@ -311,7 +311,7 @@ describe("CaptureSession", () => {
     expect(seen[0]).toMatchObject({ phase: "challenge" });
     expect(seen[0]!.weakConnection).toBeFalsy();
     expect(seen[1]).toMatchObject({ phase: "challenge", weakConnection: true });
-    expect(states.at(-1)).toMatchObject({ phase: "result", detail: "continue" });
+    expect(states.at(-1)).toMatchObject({ phase: "result", message: "continue" });
   });
 
   it.each([
@@ -328,7 +328,7 @@ describe("CaptureSession", () => {
     const { s, states } = session(st.deps);
     await s.start(false);
     expect(states.map((x) => x.phase)).toEqual(["camera", "error"]);
-    expect(states.at(-1)!.detail).toBe(detail);
+    expect(states.at(-1)).toMatchObject({ phase: "error", error: detail });
     expect(st.deps.openCamera).toHaveBeenCalledTimes(1);
     expect(cameraError(err)).toBe(detail);
   });

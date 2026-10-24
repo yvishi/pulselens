@@ -36,15 +36,12 @@ export type CustomerPhase =
 
 /**
  * Error details: "insecure" (no HTTPS / no camera API), "camera_denied", "camera_missing", "camera_busy",
- * "camera_error", "expired", "failed". Result detail: the CustomerStatus.message.
+ * "camera_error", "expired", "failed".
  */
 export type CaptureErrorDetail =
   | "insecure" | "camera_denied" | "camera_missing" | "camera_busy" | "camera_error" | "expired" | "failed";
 
-export interface CaptureState {
-  phase: CustomerPhase;
-  /** result: the CustomerMessage; error: a CaptureErrorDetail */
-  detail?: string;
+interface CaptureCommon {
   /** from the Plan, once known: the agent will ask a few questions (no-flash path, no face found) */
   agentQuestions?: boolean;
   /** coaching: at most 2 tips for this round */
@@ -52,6 +49,14 @@ export interface CaptureState {
   /** set once 2 frame batches have failed: "Weak connection, still sending" (kept until the end) */
   weakConnection?: boolean;
 }
+
+/** result carries the CustomerStatus.message; error carries why ("no_token" comes from CaptureFlow, never the session). */
+export type CaptureState = CaptureCommon &
+  (
+    | { phase: Exclude<CustomerPhase, "result" | "error"> }
+    | { phase: "result"; message: CustomerMessage }
+    | { phase: "error"; error: CaptureErrorDetail | "no_token" }
+  );
 
 export interface CaptureApi {
   postPreflight(id: string, token: string, body: Preflight): Promise<Plan>;
@@ -191,9 +196,11 @@ export class CaptureSession {
     return this.uploader?.stats() ?? null;
   }
 
-  private set(patch: Partial<CaptureState> & { phase: CustomerPhase }): void {
+  private set(next: CaptureState): void {
     if (this.disposed) return;
-    this.state = { ...this.state, detail: undefined, tips: undefined, ...patch };
+    // agentQuestions and weakConnection stick; tips and the result/error payload belong to one phase
+    const { agentQuestions, weakConnection } = this.state;
+    this.state = { agentQuestions, weakConnection, ...next };
     this.opts.onState(this.state);
   }
 
@@ -210,7 +217,7 @@ export class CaptureSession {
     this.started = true;
     const d = this.deps;
     const { sessionId: id, token, video } = this.opts;
-    if (d.secureContextError()) return this.set({ phase: "error", detail: "insecure" });
+    if (d.secureContextError()) return this.set({ phase: "error", error: "insecure" });
     const mobile = d.isMobile();
     const size = mobile ? MOBILE_SIZE : DESKTOP_SIZE;
     const overlayMode = d.chooseOverlayMode(!mobile); // first, inside the gesture
@@ -237,13 +244,13 @@ export class CaptureSession {
       this.set({ phase: "waiting" });
       await d.api.completeSession(id, token);
       const message = await this.poll();
-      this.set({ phase: "result", detail: message });
+      this.set({ phase: "result", message });
     } catch (e) {
       if (!(e instanceof CameraFailed)) console.error("capture session failed", e);
-      const detail: CaptureErrorDetail =
+      const error: CaptureErrorDetail =
         e instanceof CameraFailed ? e.detail : e instanceof ApiError && e.status === 410 ? "expired" : "failed";
       await this.uploader?.stop();
-      this.set({ phase: "error", detail });
+      this.set({ phase: "error", error });
     } finally {
       this.cleanup();
     }
