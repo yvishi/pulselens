@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from pulselens.bundle import _read_jsonl, frame_name
 from pulselens.contracts import (
+    Challenge,
     ChallengeEvent,
     Decision,
     FrameBatchMeta,
@@ -147,6 +148,15 @@ class SessionStore:
             if self.has(session_id, name):
                 return False
             self.save_model(session_id, name, model)
+            return True
+
+    def issue_challenge(self, session_id: str, challenge: Challenge) -> bool:
+        """Single use under concurrency; audits the issue."""
+        with self.lock(session_id):
+            if not self.save_once(session_id, "challenge", challenge):
+                return False
+            audit.append(self.path(session_id), "challenge.issued", challenge.model_dump(mode="json"))
+            self.set_state(session_id, "capturing")
             return True
 
     def has(self, session_id: str, name: str) -> bool:
