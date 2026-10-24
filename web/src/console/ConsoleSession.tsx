@@ -204,6 +204,7 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
           <div className="decide-sticky">
             <AgentActions sessionId={report.session_id} product={report.product} passcode={passcode}
               hasDecision={Boolean(decision)} recorded={report.agent_decision} outcome={decision?.outcome ?? null}
+              stepUp={decision?.step_up ?? null} customerNoFlash={report.preflight?.no_flash_requested}
               onRecorded={() => setActions((n) => n + 1)} />
           </div>
         </aside>
