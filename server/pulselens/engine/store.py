@@ -16,6 +16,7 @@ from pulselens.bundle import _read_jsonl, frame_name
 from pulselens.contracts import (
     Challenge,
     ChallengeEvent,
+    CheckResult,
     Decision,
     FrameBatchMeta,
     FrameMeta,
@@ -159,6 +160,17 @@ class SessionStore:
             self.set_state(session_id, "capturing")
             return True
 
+    def save_analysis(self, session_id: str, results: list[CheckResult], decision: Decision) -> None:
+        """results.json and decision.json (atomic writes), their audit entries, then state "done", under the lock."""
+        folder = self.path(session_id)
+        with self.lock(session_id):
+            results_json = json.dumps([r.model_dump(mode="json") for r in results])
+            self._write_text(folder / "results.json", results_json)
+            self._write_text(folder / "decision.json", decision.model_dump_json())
+            audit.append(folder, "analysis.done", results_json.encode())
+            audit.append(folder, "decision.made", decision.model_dump(mode="json"))
+            self.set_state(session_id, "done")
+
     def has(self, session_id: str, name: str) -> bool:
         return (self.path(session_id) / f"{name}.json").exists()
 
@@ -255,7 +267,11 @@ class SessionStore:
         return sorted(out, key=lambda x: x.created_at_ms, reverse=True)
 
     @staticmethod
-    def _write_json(path: Path, payload: Any) -> None:
+    def _write_text(path: Path, text: str) -> None:
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8")
         tmp.replace(path)
+
+    @staticmethod
+    def _write_json(path: Path, payload: Any) -> None:
+        SessionStore._write_text(path, json.dumps(payload))
