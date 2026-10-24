@@ -11,6 +11,7 @@ from pulselens.analysis.checks import (
     light_background,
     light_face_neck,
     light_response,
+    pulse_coherence,
     sensor_prnu,
     sensor_probe,
     sensor_regions,
@@ -34,6 +35,7 @@ log = logging.getLogger("pulselens.analysis")
 CHECKS: tuple[Callable[[AnalysisContext], list[CheckResult]], ...] = (
     sensor_stream.run, sensor_probe.run, sensor_regions.run, sensor_prnu.run, light_response.run, light_face_neck.run,
     light_background.run, turn_follow.run, turn_identity.run, visual_sbi.run,
+    pulse_coherence.run,
 )
 
 

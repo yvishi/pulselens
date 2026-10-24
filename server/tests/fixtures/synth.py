@@ -46,6 +46,7 @@ LUMA = np.array([0.2126, 0.7152, 0.0722])
 NEUTRAL_Y = 0.5  # linear luminance of the neutral screen and of every colour step
 SKIN = np.array([0.42, 0.27, 0.20])  # linear albedo-ish values; only ratios matter
 SHIRT = np.array([0.30, 0.32, 0.38])
+PBV = np.array([0.33, 0.77, 0.53])  # relative pulse strength per channel in skin (de Haan and van Leest 2014)
 WALL = np.array([0.35, 0.35, 0.33])
 AMBIENT, K = 0.5, 0.35
 PAINT_LAG_MS = 16.0  # from the step's scheduled start to the first painted frame
@@ -212,6 +213,9 @@ def make_session(
     chin_y_late: float | None = None,
     jpeg_quality: int = 95,
     identity_scale: float = 1.0,
+    pulse: float = 0.0,
+    pulse_hz: float = 1.2,
+    face_pulse_hz: float | None = None,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -232,7 +236,10 @@ def make_session(
     `chin_y_late` moves the face to that chin height from the session's midpoint on (near H: the neck leaves the
     frame for the second half); `jpeg_quality` is the encoder quality (the browser sends 0.9, i.e. 90).
     `identity_scale`: from the start of the head's return on, the landmarks are drawn with landmarks_478(scale=...),
-    a face that comes back from the turn with other proportions (G10, turn.identity)."""
+    a face that comes back from the turn with other proportions (G10, turn.identity).
+    `pulse`: the depth of a blood-volume pulse in the face and the neck skin (0.01 = 1%, PBV-weighted per channel),
+    at `pulse_hz`; `face_pulse_hz` gives the face its own rate (a swap driven by another person's face). The neck
+    box stands for neck skin here, as the old repo's neck region did (G10, pulse.coherence)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -254,6 +261,11 @@ def make_session(
     lit = [lit[(k + len(lit) // 2) % len(lit)] for k in range(len(lit))] if swap_colours and lit else None
     face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
     neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
+    if pulse:
+        phase = rng.uniform(0, 2 * np.pi)
+        face_hz = pulse_hz if face_pulse_hz is None else face_pulse_hz
+        face = face * (1 + pulse * np.outer(np.sin(2 * np.pi * face_hz * t / 1000 + phase), PBV))
+        neck = neck * (1 + pulse * np.outer(np.sin(2 * np.pi * pulse_hz * t / 1000 + phase), PBV))
     wall = _light(t, interval, events, delay_ms, background_echo * k_screen) * WALL
     yaw = _yaw(t, events, ch, turn_followed, performed=turn_performed, start_ms=turn_start_ms,
                returns=turn_returns) + (0 if perfect else rng.normal(0, 0.5, len(t)))
