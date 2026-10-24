@@ -176,6 +176,16 @@ describe("ConsoleSession", () => {
     expect(screen.getByRole("button", { name: "Approve" }).closest(".choice")!.className).not.toContain("is-suggested");
   });
 
+  it("on PASS says no signs of a fake, never that the customer is genuine", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "PASS", reasons: [] } });
+    at("/console/d79105c5121a3cb3");
+    const banner = await screen.findByRole("region", { name: "Outcome" });
+    expect(within(banner).getByRole("heading", { level: 2 }).textContent).toBe("No signs of a fake found");
+    expect(banner.textContent).toContain("Nothing raised risk.");
+    const decide = screen.getByRole("region", { name: "Your decision" });
+    expect(`${banner.textContent} ${decide.textContent}`).not.toMatch(/genuine/i);
+  });
+
   it("links to the newer and older sessions, from one fetch of the list", async () => {
     const row = (id: string, ms: number): SessionSummary => ({
       session_id: id, created_at_ms: ms, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null,

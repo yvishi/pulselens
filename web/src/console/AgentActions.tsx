@@ -8,7 +8,7 @@ const ACTIONS: AgentAction[] = ["approve", "reverify", "escalate"];
 const LABEL: Record<AgentAction, string> = { approve: "Approve", reverify: "Re-verify", escalate: "Escalate to fraud" };
 const DONE: Record<AgentAction, string> = { approve: "Approved", reverify: "Re-verification requested", escalate: "Escalated to fraud" };
 const WHAT: Record<AgentAction, string> = {
-  approve: "The customer is genuine. Continue the KYC.",
+  approve: "Continue the KYC.",
   reverify: "Send the customer a new link to try again.",
   escalate: "Pass this customer to the fraud team.",
 };
