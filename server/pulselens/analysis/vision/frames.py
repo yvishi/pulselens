@@ -41,12 +41,6 @@ def _pixels(img: np.ndarray, boxes: tuple[Box, ...]) -> np.ndarray:
     return np.concatenate(parts) if parts else img[:0].reshape(-1, 3)
 
 
-def _mean(img: np.ndarray, boxes: tuple[Box, ...]) -> np.ndarray:
-    pixels = _pixels(img, boxes)
-    if img.dtype == np.uint8:
-        return _linear_mean_u8(pixels)
-    return pixels.mean(axis=0) if len(pixels) else _NAN3.copy()
-
 
 def _mean_all(pixels: np.ndarray) -> np.ndarray:
     if pixels.dtype == np.uint8:
@@ -67,10 +61,11 @@ def region_means(img: np.ndarray, regions: FaceRegions | None) -> dict[str, tupl
     background = _mean_all(img[mask]) if mask.any() else _NAN3.copy()
     neck_ok = regions.neck.area > 0
     return {
-        "skin": (_mean(img, regions.skin), 1.0),
-        "left_cheek": (_mean(img, (regions.left_cheek,)), 1.0),
-        "right_cheek": (_mean(img, (regions.right_cheek,)), 1.0),
-        "neck": (_mean(img, (regions.neck,)) if neck_ok else _NAN3.copy(), regions.neck_coverage if neck_ok else 0.0),
+        "skin": (_mean_all(_pixels(img, regions.skin)), 1.0),
+        "left_cheek": (_mean_all(_pixels(img, (regions.left_cheek,))), 1.0),
+        "right_cheek": (_mean_all(_pixels(img, (regions.right_cheek,))), 1.0),
+        "neck": (_mean_all(_pixels(img, (regions.neck,))) if neck_ok else _NAN3.copy(),
+                 regions.neck_coverage if neck_ok else 0.0),
         "background": (background, float(mask.mean())),
     }
 

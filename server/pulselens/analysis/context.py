@@ -32,7 +32,7 @@ class AnalysisContext:
     regions: dict[str, RegionSeries]  # "skin", "left_cheek", "right_cheek", "neck", "background"
     yaw: np.ndarray  # (n,) degrees, NaN without a face (CONTRACT section 1 sign)
     face_box: np.ndarray  # (n, 4) x, y, w, h in pixels, NaN without a face
-    quality: QualityReport | None  # from quality.assess; build_context always fills it
+    quality: QualityReport  # from quality.assess
     thresholds: Thresholds
     readable: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))  # (n,) the JPEG decoded
     frame_w: int = 0
@@ -110,7 +110,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         regions=series,
         yaw=yaw,
         face_box=box,
-        quality=assess(t, series, box, frame_w, bundle.events, bundle.challenge, thresholds=thresholds),
+        quality=assess(t, series, box, bundle.events, bundle.challenge, thresholds=thresholds),
         thresholds=thresholds,
         readable=readable,
         frame_w=frame_w,

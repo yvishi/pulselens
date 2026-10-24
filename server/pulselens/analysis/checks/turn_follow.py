@@ -25,7 +25,7 @@ import numpy as np
 
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
-from pulselens.analysis.reason_text import text
+from pulselens.analysis.reason_text import reason_text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.contracts import CheckResult, Plot, TurnStep
 
@@ -75,13 +75,13 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     painted = event.painted_t_ms
     ended = event.ended_t_ms if event.ended_t_ms is not None else painted + step.duration_ms
     end = ended + float(p.get("tail_ms", 500))
-    window = ctx.quality.windows.get(step.step_id) if ctx.quality is not None else None
+    window = ctx.quality.windows.get(step.step_id)
     if window is not None and "quality.low_fps" in window.reasons:
         return [abstain(*ids, ["quality.low_fps"], f"The camera delivered {window.fps:.1f} fps during the turn, too "
                         "few to follow the head.", features={"fps": window.fps}, window_id=step.step_id)]
     unseen = [r for r in UNSEEN if window is not None and r in window.reasons]
     if unseen:
-        why = " and ".join(text(r).rstrip(".").lower() for r in unseen)
+        why = " and ".join(reason_text(r).rstrip(".").lower() for r in unseen)
         return [abstain(*ids, unseen, f"Unable to judge the turn: {why}, so the head angle cannot be trusted.",
                         quality=window.luma_ok * (1 - window.saturated),
                         features={"luma_ok": window.luma_ok, "saturated": window.saturated},

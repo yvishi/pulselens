@@ -35,7 +35,7 @@ from pulselens.analysis import specs
 from pulselens.analysis.checks.light_common import colour_events, light_not_run, session_abstain
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.echo import EchoOnset, Response, echo_onset, response
-from pulselens.analysis.reason_text import text
+from pulselens.analysis.reason_text import reason_text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.contracts import CheckResult, Plot
@@ -101,7 +101,7 @@ def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
         answered = onset.onset_ms is not None and lo <= onset.onset_ms <= hi
         order_ok = resp is not None and resp.responded and resp.cosine is not None and resp.cosine >= min_cos
         strong = resp is not None and resp.cosine is not None and resp.magnitude >= order_snr * resp.threshold
-        window = ctx.quality.windows.get(step.step_id) if ctx.quality is not None else None
+        window = ctx.quality.windows.get(step.step_id)
         out.append(StepEcho(step.step_id, e.painted_t_ms, onset, resp, answered, order_ok, strong=strong,
                             window_reasons=window.blocking() if window is not None else []))
     # Silent only with the power to hear an echo: the session's own answered echoes, else the provisional cap.
@@ -153,7 +153,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
             (sum(s.unclear == "weak_colour" for s in judged), "changed too little to read the colour"),
         ) if n)
         if poor:
-            why += f"; {len(poor)} had poor capture ({', '.join(text(r).rstrip('.').lower() for r in window_reasons)})"
+            what = ", ".join(reason_text(r).rstrip(".").lower() for r in window_reasons)
+            why += f"; {len(poor)} had poor capture ({what})"
         return [abstain(*ids, ["light.too_few_steps"] + ["light.weak_face_echo"] * (unclear > 0) + window_reasons,
                         f"Only {len(valid)} of {len(steps)} colour steps could be judged on the face (need "
                         f"{min_steps}){why}.", quality=quality,

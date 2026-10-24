@@ -57,5 +57,5 @@ REASON_TEXT: dict[str, str] = {
 }
 
 
-def text(code: str) -> str:
+def reason_text(code: str) -> str:
     return REASON_TEXT.get(code, code)
