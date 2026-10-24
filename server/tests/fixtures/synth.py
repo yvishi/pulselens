@@ -190,6 +190,11 @@ def make_session(
     face_lost_in_turn: float = 0.0,
     echo_gain: float = 1.0,
     face_pixel_noise_gain: float = 1.0,
+    flicker: float = 0.0,
+    flicker_exposure_ms: float = 8.0,
+    glare: bool = False,
+    chin_y_late: float | None = None,
+    jpeg_quality: int = 95,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -204,7 +209,11 @@ def make_session(
     `echo_gain`: how much of the screen light reaches the scene at all (a screen farther away or a brighter room);
     around 0.02 the face's echo sits at the onset threshold, like the weak bright-room webcam session of issue #17.
     `face_pixel_noise_gain`: the sensor noise inside the face box relative to the rest of the frame (below 1: a face
-    smoother than the real neck around it, as a repainted face may be)."""
+    smoother than the real neck around it, as a repainted face may be).
+    Nuisances (G11): `flicker` is the depth of a 100 Hz room-light ripple (a tube light), averaged over
+    `flicker_exposure_ms` per frame, so it aliases at low fps; `glare` blows out a band across the forehead;
+    `chin_y_late` moves the face to that chin height from the session's midpoint on (near H: the neck leaves the
+    frame for the second half); `jpeg_quality` is the encoder quality (the browser sends 0.9, i.e. 90)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -236,10 +245,17 @@ def make_session(
         mid, half = (w0 + w1) / 2, face_lost_in_turn * (w1 - w0) / 2
         lost = (t >= mid - half) & (t <= mid + half)
 
-    fx0, fy0, fx1, fy1 = 120, int(chin_y - 110), 200, int(chin_y)
+    # Tube-light flicker: the room light ripples at 100 Hz; each frame averages it over its (short) exposure.
+    w100 = 2 * np.pi * 0.1  # rad per ms
+    a, b = t - flicker_exposure_ms, t
+    ripple = 1 + flicker * (np.sin(w100 * b) - np.sin(w100 * a)) / (w100 * flicker_exposure_ms) if flicker else None
+    late = t >= t[-1] / 2 if chin_y_late is not None else np.zeros(len(t), dtype=bool)
+    fx0, fx1 = 120, 200
     frames, lms = [], {}
-    lm = landmarks_478(chin_y)
     for i, ti in enumerate(t):
+        chin = chin_y_late if late[i] else chin_y
+        fy0, fy1 = int(chin - 110), int(chin)
+        lm = landmarks_478(chin)
         img = np.empty((H, W, 3), dtype=np.float32)
         img[:] = wall[i] + rng.normal(0, noise / 5, 3) if noise else wall[i]
         if face_in_frames:
@@ -251,8 +267,12 @@ def make_session(
                 field = field.copy()
                 field[fy0:fy1, fx0:fx1] *= np.float32(face_pixel_noise_gain)
             img += field
+        if ripple is not None:
+            img *= np.float32(ripple[i])
+        if glare and face_in_frames:
+            img[fy0:fy0 + 35, fx0 + 10:fx1 - 10] = 1.0  # a blown-out highlight across the forehead
         srgb = _ENCODE[np.clip(img * (_ENCODE_STEPS - 1) + 0.5, 0, _ENCODE_STEPS - 1).astype(np.int32)]
-        ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
+        ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
         assert ok
         frames.append((FrameMeta(idx=i, t_ms=float(ti), w=W, h=H), jpeg.tobytes()))
         lms[i] = {"landmarks": lm, "yaw": float(yaw[i]), "pitch": 0.0} if face_in_frames and not lost[i] else None

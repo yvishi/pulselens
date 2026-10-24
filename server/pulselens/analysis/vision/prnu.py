@@ -36,11 +36,14 @@ class Fingerprint:
 
 
 def residual(gray: np.ndarray, size: int = 3) -> np.ndarray:
-    """W = I - D(I), D a local Wiener filter with the noise level estimated as the median local variance."""
+    """W = I - D(I), D a local Wiener filter with the noise level estimated as the median local variance (over every
+    2nd row and column: the same median to well under 1%, a quarter of the sorting). float32 throughout (G11:
+    this is the most expensive per-frame step)."""
+    gray = np.asarray(gray, dtype=np.float32)
     mean = cv2.blur(gray, (size, size))
     var = np.maximum(cv2.blur(gray * gray, (size, size)) - mean * mean, 0.0)
-    noise = float(np.median(var))
-    gain = np.where(var > 0, np.maximum(var - noise, 0.0) / np.maximum(var, 1e-12), 0.0)
+    noise = np.float32(np.median(var[::2, ::2]))
+    gain = np.maximum(var - noise, 0.0) / np.maximum(var, np.float32(1e-12))
     return gray - (mean + gain * (gray - mean))
 
 
@@ -82,7 +85,7 @@ class FingerprintAccumulator:
             return
         h, w = g.shape
         ch, cw = min(CROP, h), min(CROP, w)
-        g = g[(h - ch) // 2 : (h - ch) // 2 + ch, (w - cw) // 2 : (w - cw) // 2 + cw].astype(np.float64) / 255.0
+        g = g[(h - ch) // 2 : (h - ch) // 2 + ch, (w - cw) // 2 : (w - cw) // 2 + cw].astype(np.float32) / 255.0
         if self._shape is None:
             self._shape = g.shape
             self._sums = [[np.zeros(g.shape), np.zeros(g.shape)], [np.zeros(g.shape), np.zeros(g.shape)]]

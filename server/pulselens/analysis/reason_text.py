@@ -22,6 +22,7 @@ REASON_TEXT: dict[str, str] = {
                               "the camera.",
     "quality.page_hidden": "The page was in the background for a while, so no video arrived then.",
     "quality.too_few_frames": "Too few usable video frames for this measurement.",
+    "quality.heavy_compression": "The video was compressed too heavily to measure the camera's noise.",
     # family B: sensor and stream (G4, G8)
     "sensor.stall": "The video stopped for more than a second.",
     "sensor.too_regular": "Frames arrived on a perfectly regular clock, unlike a physical camera.",
