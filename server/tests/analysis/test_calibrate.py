@@ -29,9 +29,10 @@ def test_flag_at_sits_just_above_the_genuine_97_5th_percentile() -> None:
     assert sum(r >= flag_at for r in risks) == 1  # at most 1 genuine in 40 flagged
 
 
-def test_all_genuine_at_zero_risk_flags_none_of_them() -> None:
-    out, _ = calibrate(_rows([0.0] * 30), PROVISIONAL)
-    assert out[SPEC.check_id]["flag_at"] > 0
+def test_all_genuine_at_zero_risk_keeps_provisional() -> None:
+    out, report = calibrate(_rows([0.0] * 30), PROVISIONAL)
+    assert SPEC.check_id not in out
+    assert (SPEC.check_id, 30, PROVISIONAL.flag_at(SPEC.check_id), "provisional") in report
 
 
 def test_fewer_than_20_genuine_keep_the_provisional_value() -> None:
