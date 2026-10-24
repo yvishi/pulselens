@@ -279,11 +279,12 @@ describe("ConsoleSession", () => {
     expect(container.querySelector(".choice.is-suggested")).toBeNull();
   });
 
-  it("agent_checks step-up suggests no button", async () => {
+  it("agent_checks step-up suggests no button and no new link", async () => {
     api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "agent_checks" } });
     const { container } = at("/console/d79105c5121a3cb3");
-    await screen.findByRole("region", { name: "Outcome" });
+    const banner = await screen.findByRole("region", { name: "Outcome" });
     expect(container.querySelector(".choice.is-suggested")).toBeNull();
+    expect(within(banner).getByText(/What to do next/).nextElementSibling!.textContent).not.toMatch(/new link/);
   });
 
   it("keeps the actions closed until a decision exists", async () => {

@@ -6,7 +6,7 @@ export type PlainTone = "ok" | "warn" | "stop";
 
 export const OUTCOME_PLAIN: Record<Outcome, { title: string; tone: PlainTone; next: string }> = {
   PASS: { title: "No signs of a fake found", tone: "ok", next: "Nothing raised risk. You can continue the call and approve." },
-  RETRY_STEP_UP: { title: "Try again", tone: "warn", next: "Ask the customer to try again with a new link." },
+  RETRY_STEP_UP: { title: "Try again", tone: "warn", next: "A further check is needed before you decide. Follow the suggested step below." },
   HUMAN_REVIEW: {
     title: "Needs your review",
     tone: "stop",
