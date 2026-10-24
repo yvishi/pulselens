@@ -255,14 +255,8 @@ describe("CaptureSession", () => {
     expect(phases().slice(0, 5)).toEqual(["camera", "preflight", "coaching", "preflight", "challenge"]);
   });
 
-  it("a NO_FLASH plan skips every colour step and asks the agent's questions", async () => {
-    let reason: string | null = "unset";
-    const st = stubs({
-      runChallenge: vi.fn(async (_ch, d) => {
-        reason = d.shouldSkipLight();
-        return EVENTS;
-      }),
-    });
+  it("a NO_FLASH plan asks the agent's questions", async () => {
+    const st = stubs();
     st.deps.api.postPreflight = vi.fn(async () => ({
       mode: "NO_FLASH" as const, run_light: false, run_turn: true, agent_questions: true, reasons: ["mode.no_flash.requested"],
     }));
@@ -272,7 +266,6 @@ describe("CaptureSession", () => {
     st.releaseFlush();
     await vi.runAllTimersAsync();
     await done;
-    expect(reason).toBe("no_flash");
     expect(states.at(-1)).toMatchObject({ phase: "result", agentQuestions: true });
   });
 

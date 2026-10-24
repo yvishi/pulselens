@@ -3,6 +3,7 @@
 import type { ModeProbe } from "../contracts";
 import { now } from "./clock";
 import { supportsResizeMode } from "./env";
+import { frameTime, sleep } from "./util";
 
 export const PROBE_MODES: [number, number, number][] = [[1280, 720, 30], [640, 480, 30], [1000, 750, 24]];
 /** Index of the unusual mode real webcams rarely offer. */
@@ -31,7 +32,7 @@ export function nextVideoFrame(video: HTMLVideoElement, timeoutMs: number): Prom
     };
     const timer = setTimeout(() => finish(null), Math.max(0, timeoutMs));
     if (typeof video.requestVideoFrameCallback === "function") {
-      video.requestVideoFrameCallback((t, m) => finish(m.captureTime ?? m.expectedDisplayTime ?? t));
+      video.requestVideoFrameCallback((t, m) => finish(frameTime(m, t).t));
     } else {
       const start = video.currentTime;
       const poll = () => {
@@ -43,8 +44,6 @@ export function nextVideoFrame(video: HTMLVideoElement, timeoutMs: number): Prom
     }
   });
 }
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const skipped = (requested: [number, number, number]): ModeProbe =>
   ({ requested, accepted: false, delivered: null, switch_ms: null, frames_missing: null });

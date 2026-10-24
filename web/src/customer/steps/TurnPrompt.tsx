@@ -10,11 +10,11 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { now } from "../../capture/clock";
 import { createFaceTracker, type FaceTracker } from "../../capture/face";
-import { sleep } from "../../capture/flash";
 import { TurnMeter, arrowSide } from "../../capture/turn";
 import {
   raiseSelfView, textTurnPrompt, type TurnDirection, type TurnPromptFactory,
 } from "../../capture/turnPrompt";
+import { nextFrame, sleep } from "../../capture/util";
 
 /** Above the light overlay (2147483000) and the raised self-view (2147483001). */
 const PROMPT_Z = "2147483002";
@@ -83,8 +83,6 @@ export interface RingTurnPromptOptions {
   /** the self-view is mirrored (front camera); default true */
   mirrored?: boolean;
 }
-
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 export const ringTurnPrompt = (opts: RingTurnPromptOptions = {}): TurnPromptFactory => (ctx) => {
   const { overlay, video, text } = ctx;

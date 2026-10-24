@@ -13,6 +13,7 @@
  */
 import { now } from "./clock";
 import { createEncoder, type FrameEncoder } from "./encoder";
+import { frameTime, type FrameClock } from "./util";
 
 export interface GrabbedFrame {
   idx: number;
@@ -22,7 +23,7 @@ export interface GrabbedFrame {
   jpeg: Blob;
 }
 
-export type FrameClock = "captureTime" | "expectedDisplayTime" | "now";
+export type { FrameClock } from "./util";
 export type GrabberSource = "auto" | "rvfc" | "videoframe" | "raf";
 
 export interface GrabberOptions {
@@ -132,9 +133,7 @@ export class FrameGrabber {
   private runRvfc(): void {
     const loop = (cbNow: number, md: VideoFrameCallbackMetadata) => {
       if (!this.running) return;
-      const clock: FrameClock =
-        md.captureTime !== undefined ? "captureTime" : md.expectedDisplayTime !== undefined ? "expectedDisplayTime" : "now";
-      const t = md.captureTime ?? md.expectedDisplayTime ?? cbNow;
+      const { t, clock } = frameTime(md, cbNow);
       this.grab(this.video, t, clock, md.presentedFrames ?? null);
       this.video.requestVideoFrameCallback(loop);
     };

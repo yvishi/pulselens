@@ -4,8 +4,8 @@
  * camera -> runPreflight (+ coaching measure) -> up to 3 coaching rounds, then runPreflight again -> postPreflight (Plan) -> getChallenge -> FrameGrabber (t0 = challenge start) + runChallenge
  * on a LightOverlay (exposure locked around it behind ?lock=1) -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
  *
- * The server's plan decides what runs: on a NO_FLASH plan (or run_light false) every colour step is skipped
- * ("no_flash"), so nothing is painted and only the turn runs; the agent then asks a few questions.
+ * The server's plan decides what runs: a NO_FLASH plan (or run_light false) gets a challenge with no colour steps,
+ * so nothing is painted and only the turn runs; the agent then asks a few questions.
  * completeSession is never called while a frame batch is in flight (the uploader is flushed or stopped first).
  *
  * Hardening (Y9): an fps drop (< 12 fps over the last 2 s) skips the remaining colour steps ("fps_drop"), never the
@@ -112,8 +112,6 @@ export interface CaptureSessionOptions {
   turnPrompt?: TurnPromptFactory;
   /** turn prompt text per direction (customer strings) */
   turnText?: (dir: TurnDirection) => string;
-  /** an extra reason to skip the next colour step (Y9: "fps_drop"); "page_hidden" is built in */
-  shouldSkipLight?: (grabber: SessionGrabber | null) => string | null;
   deps?: Partial<CaptureSessionDeps>;
 }
 
@@ -300,9 +298,7 @@ export class CaptureSession {
     });
     const fpsDrop = fpsDropSkip(grabber);
     const shouldSkipLight = () =>
-      (noFlash ? "no_flash" : null) ??
-      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ??
-      fpsDrop() ?? this.opts.shouldSkipLight?.(grabber) ?? null;
+      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ?? fpsDrop() ?? null;
     try {
       return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight });
     } finally {

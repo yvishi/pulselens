@@ -8,6 +8,7 @@
  */
 import { now } from "./clock";
 import { NEUTRAL_LUMINANCE, cssColour, neutralColour, type RGB } from "./colour";
+import { nextFrame } from "./util";
 
 export type OverlayMode = "fullscreen" | "border";
 
@@ -31,8 +32,6 @@ export async function chooseOverlayMode(desktop: boolean, el: Element = document
 export function viewportHeight(): string {
   return globalThis.CSS?.supports?.("height", "100dvh") ? "100dvh" : "100vh";
 }
-
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 export class LightOverlay {
   readonly element: HTMLDivElement;

@@ -6,7 +6,7 @@
  * The client never judges the turn; the prompt ends after durationMs whatever happened.
  */
 import { now } from "./clock";
-import { sleep } from "./flash";
+import { nextFrame, sleep } from "./util";
 
 export type TurnDirection = "left" | "right";
 /** What runChallenge calls for a turn step; resolves with painted/ended in ms since t0. */
@@ -33,8 +33,6 @@ export const arrowFor = (dir: TurnDirection): string => (dir === "left" ? "←" 
 export function promptLine(dir: TurnDirection, text: string): string {
   return dir === "left" ? `${arrowFor(dir)} ${text}` : `${text} ${arrowFor(dir)}`;
 }
-
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 /** Raises the self-view above the overlay; returns a function that puts it back. */
 export function raiseSelfView(video: HTMLVideoElement): () => void {

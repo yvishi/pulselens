@@ -31,12 +31,7 @@ export function laplacianVariance(d: Uint8ClampedArray, w: number, h: number): n
   return Math.max(0, sum2 / n - mean * mean);
 }
 
-export function median(xs: number[]): number {
-  if (!xs.length) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-}
+export { median } from "./util";
 
 /** A sampler that draws the current video frame at QUALITY_SIZE and measures it; returns null without a 2D canvas. */
 export function videoQualitySampler(video: HTMLVideoElement): () => { blur: number; brightness: number } | null {
