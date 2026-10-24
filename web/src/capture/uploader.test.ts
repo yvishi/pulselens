@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import type { FrameBatchMeta } from "../contracts";
 import type { GrabbedFrame } from "./grabber";
-import { FrameUploader, type PostFrames } from "./uploader";
+import { FrameUploader, MAX_BATCH, MAX_QUEUE, type PostFrames } from "./uploader";
 
 const frame = (idx: number): GrabbedFrame => ({ idx, t_ms: idx * 33.3, w: 640, h: 480, jpeg: new Blob(["x"]) });
 
@@ -44,15 +44,40 @@ describe("FrameUploader", () => {
     await up.flush();
   });
 
-  it("keeps at most 90 frames queued and drops the oldest", async () => {
+  it("keeps at most MAX_QUEUE frames queued and drops the oldest", async () => {
     const { post, calls } = fakePost();
     const up = uploader(post);
-    for (let i = 0; i < 100; i++) up.push(frame(i));
+    for (let i = 0; i < MAX_QUEUE + 10; i++) up.push(frame(i));
     expect(up.stats().dropped).toBe(10);
     await up.flush();
     const sent = calls.flatMap((c) => c.meta.frames.map((f) => f.idx));
-    expect(sent).toEqual([...Array(90).keys()].map((k) => k + 10));
-    expect(up.stats()).toEqual({ sent: 90, dropped: 10, failedBatches: 0 });
+    expect(sent).toEqual([...Array(MAX_QUEUE).keys()].map((k) => k + 10));
+    expect(up.stats()).toEqual({ sent: MAX_QUEUE, dropped: 10, failedBatches: 0 });
+  });
+
+  it("loses no frames when one attempt hangs until its timeout while the camera keeps delivering at 30 fps", async () => {
+    // The lab failure: one upload stalled, the queue overflowed and ~4 s of frames (idx 88 -> 200) never arrived.
+    const { post, calls } = fakePost((_c, k) => (k === 1 ? new Promise<void>(() => undefined) : Promise.resolve()));
+    const up = uploader(post);
+    let idx = 0;
+    const camera = setInterval(() => up.push(frame(idx++)), 33);
+    await vi.advanceTimersByTimeAsync(10_000); // 1 s normal, the hung attempt, its retry, the catch-up
+    clearInterval(camera);
+    await up.flush();
+    const sent = calls.slice(0).filter((_c, k) => k !== 1).flatMap((c) => c.meta.frames.map((f) => f.idx));
+    expect(up.stats().dropped).toBe(0);
+    expect(new Set(sent)).toEqual(new Set([...Array(idx).keys()]));
+    expect(calls.every((c) => c.meta.frames.length <= MAX_BATCH)).toBe(true);
+  });
+
+  it("drains a backlog in back-to-back batches instead of one per batchMs", async () => {
+    const { post, calls } = fakePost();
+    const up = uploader(post);
+    for (let i = 0; i < 4 * MAX_BATCH; i++) up.push(frame(i));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(4);
+    expect(calls.map((c) => c.meta.batch_seq)).toEqual([0, 1, 2, 3]);
+    await up.flush();
   });
 
   it("retries twice then counts a failed batch (network error, 500 ms backoff)", async () => {
