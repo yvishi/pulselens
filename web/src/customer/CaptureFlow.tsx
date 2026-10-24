@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { startTap, type DeviceSession } from "../capture/device";
 import { CaptureSession, type CaptureState } from "../capture/session";
 import "./customer.css";
+import { CameraIcon, FaceInFrame, LockIcon, WeakSignalIcon } from "./steps/Art";
 import { Coaching } from "./steps/Coaching";
-import { Consent } from "./steps/Consent";
+import { Consent, LangToggle } from "./steps/Consent";
 import { ErrorStep } from "./steps/ErrorStep";
+import { Progress, stepOf } from "./steps/Progress";
 import { Result } from "./steps/Result";
-import { Status } from "./steps/Status";
+import { Status, Waiting } from "./steps/Status";
 import { ringTurnPrompt } from "./steps/TurnPrompt";
 import { browserLang, t, turnKey, type Lang } from "./strings";
 
@@ -70,6 +72,7 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
   };
 
   const { phase, tips, agentQuestions, weakConnection } = state;
+  const step = stepOf(phase);
   return (
     <main className={className ? `customer ${className}` : "customer"} data-phase={phase} lang={lang} {...data}>
       <video
@@ -79,24 +82,35 @@ export function CaptureFlow({ sessionId, token, className, data, renderResult, r
         playsInline
         aria-hidden="true"
       />
-      {phase === "consent" && <Consent lang={lang} onLang={setLang} onStart={start} />}
-      {phase === "camera" && <Status lang={lang} text="camera.asking" />}
-      {phase === "coaching" && <Coaching lang={lang} tips={tips} />}
-      {(phase === "preflight" || phase === "ready") && (
-        <Status lang={lang} text="preflight.checking" hint="preflight.hint" />
-      )}
-      {phase === "challenge" && <Status lang={lang} text="challenge.look" />}
-      {(phase === "uploading" || phase === "waiting") && (
-        <Status lang={lang} text="waiting.text" hint={agentQuestions ? "agent.questions" : undefined} />
-      )}
-      {weakConnection && WEAK_PHASES.has(phase) && (
-        <p className="muted weak-connection" role="status" aria-live="polite">
-          {t("upload.weak", lang)}
+      <header className="kyc-head">
+        <p className="kyc-secure">
+          <LockIcon />
+          <span>{t("frame.secure", lang)}</span>
         </p>
-      )}
-      {state.phase === "result" &&
-        (renderResult ? renderResult(state, lang) : <Result lang={lang} message={state.message} agentQuestions={agentQuestions} />)}
-      {state.phase === "error" && (renderError ? renderError(state, lang) : <ErrorStep lang={lang} error={state.error} />)}
+        {phase === "consent" && <LangToggle lang={lang} onLang={setLang} />}
+      </header>
+      {step !== null && <Progress lang={lang} step={step} complete={phase === "result"} />}
+      <div className="kyc-body">
+        {phase === "consent" && <Consent lang={lang} onStart={start} />}
+        {phase === "camera" && <Status lang={lang} text="camera.asking" art={<CameraIcon />} />}
+        {phase === "coaching" && <Coaching lang={lang} tips={tips} />}
+        {(phase === "preflight" || phase === "ready") && (
+          <Status lang={lang} text="preflight.checking" hint="preflight.hint" art={<FaceInFrame />} />
+        )}
+        {phase === "challenge" && <Status lang={lang} text="challenge.look" />}
+        {(phase === "uploading" || phase === "waiting") && (
+          <Status lang={lang} text="waiting.text" hint={agentQuestions ? "agent.questions" : undefined} art={<Waiting />} />
+        )}
+        {weakConnection && WEAK_PHASES.has(phase) && (
+          <p className="weak-connection" role="status" aria-live="polite">
+            <WeakSignalIcon />
+            <span>{t("upload.weak", lang)}</span>
+          </p>
+        )}
+        {state.phase === "result" &&
+          (renderResult ? renderResult(state, lang) : <Result lang={lang} message={state.message} agentQuestions={agentQuestions} />)}
+        {state.phase === "error" && (renderError ? renderError(state, lang) : <ErrorStep lang={lang} error={state.error} />)}
+      </div>
     </main>
   );
 }

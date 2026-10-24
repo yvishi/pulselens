@@ -30,12 +30,18 @@ export interface TurnPromptViewProps {
   mirrored?: boolean;
 }
 
-/** White text on a dark 50% backdrop, so it reads on any overlay colour; fits a 360 px screen. */
+/**
+ * White text on a dark navy backdrop, so it reads on any overlay colour (fixed colours on purpose: the overlay behind it
+ * changes colour, so the page tokens do not apply); fits a 360 px screen. Type follows the page fonts (:root vars).
+ */
 export function TurnPromptView({ direction, text, progress, mirrored = true }: TurnPromptViewProps) {
   const side = arrowSide(direction, mirrored);
   const arrow = (
-    <span data-arrow={side} aria-hidden="true" style={{ fontSize: "clamp(56px, 18vw, 88px)", lineHeight: 1, fontWeight: 700 }}>
-      {side === "left" ? "←" : "→"}
+    <span data-arrow={side} aria-hidden="true" style={{ display: "flex", width: "clamp(56px, 18vw, 80px)", lineHeight: 0 }}>
+      <svg viewBox="0 0 48 48" width="100%" style={{ transform: side === "left" ? "scaleX(-1)" : undefined }}>
+        <path d="M8 24h30M26 11l13 13-13 13" fill="none" stroke="#fff" strokeWidth="5.5" strokeLinecap="round"
+          strokeLinejoin="round" />
+      </svg>
     </span>
   );
   return (
@@ -44,8 +50,9 @@ export function TurnPromptView({ direction, text, progress, mirrored = true }: T
       aria-live="assertive"
       style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", boxSizing: "border-box",
-        maxWidth: "min(88vw, 420px)", padding: "20px 16px", borderRadius: "16px", textAlign: "center",
-        color: "#fff", background: "rgba(0, 0, 0, 0.5)", font: "600 clamp(18px, 5vw, 24px)/1.3 system-ui, sans-serif",
+        maxWidth: "min(88vw, 420px)", padding: "22px 18px", borderRadius: "20px", textAlign: "center",
+        color: "#fff", background: "rgba(14, 20, 35, 0.62)", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.25)",
+        font: "700 clamp(19px, 5.2vw, 24px)/1.3 var(--font-body, system-ui, sans-serif)",
       }}
     >
       {progress === null ? (
@@ -59,9 +66,9 @@ export function TurnPromptView({ direction, text, progress, mirrored = true }: T
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", transform: "rotate(-90deg)" }}
             aria-hidden="true"
           >
-            <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="10" />
+            <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="9" />
             <circle
-              cx="60" cy="60" r={R} fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="round"
+              cx="60" cy="60" r={R} fill="none" stroke="#fff" strokeWidth="9" strokeLinecap="round"
               strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
             />
           </svg>

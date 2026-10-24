@@ -1,63 +1,393 @@
-/* Customer screens: mobile first (360 px wide, no sideways scroll). Shared base in shared/styles.css. */
-.customer {
+/*
+ * Customer capture screens (also the Lab's capture stage): mobile first, 360 px wide with no sideways scroll.
+ * Everything is scoped to `.customer[data-phase]` (the CaptureFlow <main>), so nothing leaks to console pages or to
+ * the Lab's form and handoff stages. Colours come only from the tokens in shared/styles.css.
+ */
+.customer[data-phase] {
   max-width: 32rem;
-  min-height: 60vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 1rem;
+  padding-top: max(var(--gutter), env(safe-area-inset-top));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
 }
 
-.customer .step {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.customer[data-phase] h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: 1.2;
 }
 
-.customer h1 {
-  font-size: 1.5rem;
-  line-height: 1.25;
+.customer[data-phase] p {
   margin: 0;
 }
 
-.customer p {
-  margin: 0;
-}
-
-.customer .muted {
-  opacity: 0.8;
-  font-size: 0.95rem;
-}
-
-.customer .status-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-  text-align: center;
-}
-
-.customer .actions {
+/* ---------- Frame: the secure line and the language switch ---------- */
+.customer[data-phase] .kyc-head {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
 }
 
-.customer button {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 2px solid currentColor;
+.customer[data-phase] .kyc-secure {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.customer[data-phase] .kyc-secure svg {
+  flex: none;
+  color: var(--stamp);
+}
+
+.customer[data-phase] .lang-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.customer[data-phase] .lang-toggle button {
+  min-height: 48px;
+  min-width: 4.5rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
-  color: inherit;
+  color: var(--ink-soft);
+  font-weight: 700;
   cursor: pointer;
 }
 
-.customer button.primary {
-  background: #1f5fbf;
-  border-color: #1f5fbf;
-  color: #fff;
+.customer[data-phase] .lang-toggle button[aria-pressed="true"] {
+  background: var(--stamp);
+  color: var(--stamp-ink);
 }
 
-/* The camera <video>: always rendered while the camera is open (the grabber reads it), mirrored. */
+/* ---------- 3-step progress ---------- */
+.customer[data-phase] .kyc-steps {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customer[data-phase] .kyc-step {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+/* The line joining this dot to the previous one. */
+.customer[data-phase] .kyc-step + .kyc-step::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  right: calc(50% + 20px);
+  left: calc(-50% + 20px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.customer[data-phase] .kyc-step.is-done + .kyc-step::before {
+  background: var(--stamp);
+}
+
+.customer[data-phase] .kyc-dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.customer[data-phase] .kyc-step.is-current .kyc-dot {
+  border-color: var(--stamp);
+  background: var(--stamp);
+  color: var(--stamp-ink);
+}
+
+.customer[data-phase] .kyc-step.is-done .kyc-dot {
+  border-color: var(--stamp);
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.customer[data-phase] .kyc-step.is-current .kyc-step-name {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---------- Body ---------- */
+.customer[data-phase] .kyc-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.customer[data-phase="consent"] .kyc-body {
+  justify-content: flex-start;
+}
+
+.customer[data-phase] .step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.customer[data-phase] .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.customer[data-phase] .actions .btn {
+  width: 100%;
+  text-align: center;
+}
+
+.customer[data-phase] .btn-big {
+  min-height: 56px;
+  font-size: var(--text-lg);
+}
+
+.customer[data-phase] .hint {
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+}
+
+/* ---------- Consent ---------- */
+.customer[data-phase] .lead {
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+}
+
+.customer[data-phase] .what-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customer[data-phase] .what-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.customer[data-phase] .what-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius);
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.customer[data-phase] .privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: var(--ink-soft);
+}
+
+.customer[data-phase] .privacy svg {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--stamp);
+}
+
+.customer[data-phase] .note {
+  margin-top: 0.5rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- Status screens: camera, preflight, coaching, waiting ---------- */
+.customer[data-phase] .step-status {
+  align-items: center;
+  text-align: center;
+}
+
+.customer[data-phase] .status-art {
+  display: flex;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.customer[data-phase] .status-text {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.customer[data-phase] .art-frame {
+  width: min(44vw, 170px);
+  height: auto;
+}
+
+.customer[data-phase] .art-icon {
+  box-sizing: content-box;
+  padding: 20px;
+  border-radius: 50%;
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.customer[data-phase] .tips {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.customer[data-phase] .tips li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.customer[data-phase] .tip-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.customer[data-phase] .waiting-dots {
+  display: inline-flex;
+  gap: 12px;
+  padding: 1.25rem 0 0.5rem;
+}
+
+.customer[data-phase] .waiting-dots span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--stamp);
+  animation: kyc-breathe 1.4s ease-in-out infinite;
+}
+
+.customer[data-phase] .waiting-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.customer[data-phase] .waiting-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes kyc-breathe {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer[data-phase] .waiting-dots span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.customer[data-phase] .weak-connection {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.customer[data-phase] .weak-connection svg {
+  flex: none;
+}
+
+/* ---------- Result and error ---------- */
+.customer[data-phase] .step-result {
+  align-items: center;
+  text-align: center;
+}
+
+.customer[data-phase] .art-result {
+  width: 112px;
+  height: 112px;
+}
+
+.customer[data-phase] .result-title {
+  font-size: var(--text-xl);
+}
+
+.customer[data-phase] .result-text {
+  font-size: 1.6rem;
+}
+
+.customer[data-phase] .step-result .actions {
+  align-self: stretch;
+}
+
+.customer[data-phase] .callout {
+  align-self: stretch;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: var(--stamp-tint);
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* ---------- The camera <video>: always rendered while the camera is open (the grabber reads it), mirrored ---------- */
 .customer video.selfview {
   position: fixed;
   top: 0;
@@ -73,6 +403,8 @@
   top: max(8px, env(safe-area-inset-top));
   right: max(8px, env(safe-area-inset-right));
   width: 25vw;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow);
 }
 
 /* Challenge: tucked into the corner under the light overlay (inside its 18% border), until the turn raises it. */
@@ -84,31 +416,23 @@
   display: none;
 }
 
-/* EN/HI toggle on the consent screen: two small buttons side by side. */
-.customer .lang-toggle {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
+/* Phones while the self-view sits in the top corner: keep the frame text clear of it. */
+@media (max-width: 48rem) {
+  .customer:is([data-phase="camera"], [data-phase="preflight"], [data-phase="coaching"], [data-phase="ready"])
+    :is(.kyc-head, .kyc-steps) {
+    padding-right: calc(25vw + 4px);
+  }
 
-.customer .lang-toggle button {
-  width: auto;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.95rem;
-}
-
-.customer .lang-toggle button[aria-pressed="true"] {
-  background: #1f5fbf;
-  border-color: #1f5fbf;
-  color: #fff;
-}
-
-/* Coaching tips: at most 2, large and plain. */
-.customer .tips {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 1.15rem;
-  overflow-wrap: anywhere;
+  .customer:is([data-phase="camera"], [data-phase="preflight"], [data-phase="coaching"], [data-phase="ready"])
+    .kyc-step:not(.is-current)
+    .kyc-step-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }
 
 /* Phones during the challenge: no page scroll or pull-to-refresh under the light overlay (iPhone Safari has no

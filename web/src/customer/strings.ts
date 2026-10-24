@@ -8,7 +8,15 @@ import type { TurnDirection } from "../capture/turnPrompt";
 
 const en = {
   "consent.title": "Quick camera check",
-  "consent.body": "Your screen will show a few soft colours and ask you to turn your head. This takes about 20 seconds.",
+  "frame.secure": "Secure video KYC check",
+  "progress.label": "Steps",
+  "progress.ready": "Get ready",
+  "progress.camera": "Camera check",
+  "progress.done": "Done",
+  "consent.lead": "Here is what will happen:",
+  "consent.item.colours": "Your screen shows a few soft colours.",
+  "consent.item.turn": "You turn your head when asked.",
+  "consent.item.time": "It takes about 20 seconds.",
   "consent.privacy": "We use your camera only for this check. Keep your face in view, in good light.",
   "consent.photosensitive":
     "If changing colours on a screen bother you, choose the second button: you will only be asked to turn your head.",
@@ -47,6 +55,8 @@ const en = {
   "error.expired": "This link has expired. Please ask the agent for a new link.",
   "error.failed": "Something went wrong. Please tell the agent; they will help you continue.",
   "error.no_token": "This link is incomplete. Please ask the agent for a new link.",
+  "error.title": "We need to pause here",
+  "error.next": "Stay on the call. The agent will tell you what to do next.",
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -54,7 +64,15 @@ export type Lang = "en" | "hi";
 
 const hi: Record<StringKey, string> = {
   "consent.title": "कैमरा से जल्दी जाँच",
-  "consent.body": "आपकी स्क्रीन पर कुछ हल्के रंग दिखेंगे और आपसे सिर घुमाने को कहा जाएगा। इसमें लगभग 20 सेकंड लगेंगे।",
+  "frame.secure": "सुरक्षित वीडियो KYC जाँच",
+  "progress.label": "चरण",
+  "progress.ready": "तैयारी",
+  "progress.camera": "कैमरा जाँच",
+  "progress.done": "पूरा",
+  "consent.lead": "आगे यह होगा:",
+  "consent.item.colours": "आपकी स्क्रीन पर कुछ हल्के रंग दिखेंगे।",
+  "consent.item.turn": "कहने पर आप अपना सिर घुमाएँगे।",
+  "consent.item.time": "इसमें लगभग 20 सेकंड लगेंगे।",
   "consent.privacy": "हम आपका कैमरा सिर्फ़ इस जाँच के लिए इस्तेमाल करते हैं। अपना चेहरा कैमरे में और अच्छी रोशनी में रखें।",
   "consent.photosensitive":
     "अगर स्क्रीन पर बदलते रंगों से आपको परेशानी होती है, तो दूसरा बटन चुनें: आपसे सिर्फ़ सिर घुमाने को कहा जाएगा।",
@@ -93,6 +111,8 @@ const hi: Record<StringKey, string> = {
   "error.expired": "इस लिंक की समय-सीमा खत्म हो गई है। कृपया एजेंट से नया लिंक माँगें।",
   "error.failed": "कुछ गड़बड़ हो गई। कृपया एजेंट को बताएँ; वे आगे बढ़ने में आपकी मदद करेंगे।",
   "error.no_token": "यह लिंक अधूरा है। कृपया एजेंट से नया लिंक माँगें।",
+  "error.title": "हमें यहाँ रुकना होगा",
+  "error.next": "कॉल पर बने रहें। एजेंट आपको बताएँगे कि आगे क्या करना है।",
 };
 
 export const strings: Record<Lang, Record<StringKey, string>> = { en, hi };

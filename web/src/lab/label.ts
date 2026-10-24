@@ -8,6 +8,27 @@ export const KINDS = [
 ] as const satisfies readonly Label["kind"][];
 export const SETS = ["A", "B"] as const satisfies readonly Label["set"][];
 
+/** Plain words for each option, for the form and the handoff summary. */
+export const KIND_TEXT: Record<Label["kind"], string> = {
+  genuine: "Genuine (the person, live)",
+  replay_screen: "Replay on a screen",
+  virtual_camera: "Virtual camera",
+  live_swap: "Live face swap",
+  photo_animation: "Photo animation",
+};
+
+export const LIGHT_TEXT: Record<Label["light"], string> = {
+  bright: "Bright (daylight, window)",
+  normal: "Normal (indoor room)",
+  dim: "Dim (evening, one lamp)",
+  tube: "Tube light",
+};
+
+export const SET_TEXT: Record<Label["set"], string> = {
+  A: "A (tuning)",
+  B: "B (held-out evaluation)",
+};
+
 /** What the form holds: every field a string (selects included), before validation. */
 export interface LabelForm {
   person: string;
