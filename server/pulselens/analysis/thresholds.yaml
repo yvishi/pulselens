@@ -32,7 +32,8 @@ light.face_neck:
   flag_at: 0.5
   min_pairs: 3
   min_snr: 2.0
-  ratio_log_tolerance: 1.386 # ln 4: skin and shirt reflect differently, so up to 4x either way scores nothing
+  ratio_log_tolerance: 2.079 # ln 8: skin and shirt reflect differently; 15 real sessions (S2) went down to 0.16
+                             # (1/6.3), so up to 8x either way scores nothing (was ln 4, which flagged one)
   ratio_log_scale: 0.693     # ln 2 per score unit beyond that
   neck_only_steps: 2
 
@@ -65,6 +66,8 @@ sensor.mode_probe:
 sensor.regions:
   flag_at: 0.5
   ratio_log_tolerance: 0.916 # ln 2.5: face noise within 2.5x of the neck's scores nothing
+  voting: false              # measured, not voting, until G9 calibrates it: 10 real genuine sessions (S2) had
+                             # face/neck noise 1.0-5.4x (the face is brighter than the shirt; noise rises with light)
   ratio_log_scale: 0.693     # ln 2 per score unit beyond that
   min_frames: 20             # still frames with a face
   min_jpeg_quality: 80       # below this the encoder wipes sensor noise (G11); the browser sends 90
