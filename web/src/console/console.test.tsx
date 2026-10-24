@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
 vi.mock("../api/client", async (orig) => ({ ...(await orig<typeof import("../api/client")>()), ...api }));
 
 const { ApiError } = await import("../api/client");
-const { ConsoleList } = await import("./ConsoleList");
+const { ConsoleList, visibleRows } = await import("./ConsoleList");
 const { ConsoleSession } = await import("./ConsoleSession");
 const { pickEvidenceFrames } = await import("./EvidenceFrames");
 const { alignSeries } = await import("./CheckPlot");
@@ -196,5 +196,56 @@ describe("helpers", () => {
     const { names, data } = alignSeries({ kind: "echo", series: { face: [[0, 1], [10, 2]], neck: [[10, 3]] } });
     expect(names).toEqual(["face", "neck"]);
     expect(data).toEqual([[0, 10], [1, 2], [null, 3]]);
+  });
+});
+
+describe("visibleRows", () => {
+  const row = (ms: number): SessionSummary => ({
+    session_id: `s${ms}`, created_at_ms: ms, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null,
+  });
+  const rows = [row(500), row(1000), row(1500)];
+
+  it("returns all rows when cutoff is null", () => {
+    expect(visibleRows(rows, null)).toHaveLength(3);
+  });
+
+  it("keeps only rows strictly newer than the cutoff", () => {
+    expect(visibleRows(rows, 1000)).toEqual([row(1500)]);
+  });
+});
+
+describe("ConsoleList reset demo", () => {
+  const row = (id: string, ms: number): SessionSummary => ({
+    session_id: id, created_at_ms: ms, product: "savings_account", attempt: 1, state: "done", mode: null, outcome: null, label_kind: null,
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.setItem("pulselens.agent_passcode", "pc");
+    api.listSessions.mockResolvedValue([row("old1", 1000), row("old2", 2000)]);
+  });
+
+  it("reset hides existing rows, show all brings them back", async () => {
+    at("/console");
+    await screen.findByRole("table", { name: "Sessions" });
+    fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
+    expect(await screen.findByText("No sessions yet.")).toBeTruthy();
+    expect(localStorage.getItem("pulselens.reset_after_ms")).toBe("2000");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    const table = await screen.findByRole("table", { name: "Sessions" });
+    expect(within(table).getByRole("link", { name: "old1" })).toBeTruthy();
+    expect(within(table).getByRole("link", { name: "old2" })).toBeTruthy();
+    expect(localStorage.getItem("pulselens.reset_after_ms")).toBeNull();
+  });
+
+  it("reset survives a re-render", async () => {
+    const first = at("/console");
+    await screen.findByRole("table", { name: "Sessions" });
+    fireEvent.click(screen.getByRole("button", { name: "Reset demo" }));
+    expect(await screen.findByText("No sessions yet.")).toBeTruthy();
+    first.unmount();
+    at("/console");
+    expect(await screen.findByText("No sessions yet.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show all" })).toBeTruthy();
   });
 });

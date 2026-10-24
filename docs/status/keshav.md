@@ -13,7 +13,7 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [ ] K8
 - [x] K9 — new session panel on `/console`: product select, no-flash checkbox, customer link as text, QR (canvas 256 px) and copy button. Open the console through the `python scripts/dev.py tunnel` URL so the link and QR point to HTTPS (phones need it for the camera). Tests: 4 vitest, 1 Brave e2e (QR canvas ≥ 240 px, link has `/customer/`). 2026-10-23.
 - [ ] K10
-- [ ] K11
+- [x] K11 — hardening: `engine/purge.py::purge` deletes unlabelled sessions older than 60 min at server start and every 10 min (never an unreadable or "analysing" one); `scripts/purge.py` (`--all-volunteers` needs the typed `DELETE`). Console "Reset demo" hides every session present at the click (cutoff = newest `created_at_ms`, server time only, rule 1) and "Show all" undoes it; the task text said "older than 1 h", which needs the browser clock. The unreachable message already existed; analysis keeps its timeout. Tests: 8 pytest, 4 vitest. 2026-10-24.
 
 ## Decisions
 - **K7: frame images are fetched with the passcode header and shown as blob URLs**, because an `<img src>` cannot send `X-Agent-Passcode`. The evidence frame for a step is chosen from its painted time × the measured fps (the report has no per-frame times); good enough for a thumbnail.
