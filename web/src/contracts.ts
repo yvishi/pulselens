@@ -94,6 +94,14 @@ export interface TurnStep {
   duration_ms: number;
 }
 
+/** Neutral-screen steady hold. Not emitted until planner and capture integration. */
+export interface PulseHoldStep {
+  kind: "pulse_hold";
+  step_id: string;
+  start_offset_ms: number; // non-negative; from the end of the baseline
+  duration_ms: number; // positive
+}
+
 export type Step = ColourStep | TurnStep;
 
 export interface Challenge {

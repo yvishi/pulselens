@@ -1,118 +1,115 @@
-# PulseLens: Plan vs. Built Report
+# PulseLens: plan vs. built
 
-**Context:** Amazon AI Cyber Security Hackathon Finale (Challenge 03 — Team Mama Mia)  
-**Evaluator Reference:** Criterion 5 (Honest Accounting of Promised vs. Built vs. Cut)
+Criterion 5: what we promised in `docs/PLAN.md`, what is merged on `main`, and what is still open. Every PR number links to
+yvishi/pulselens; every "done" line is backed by a status file (`docs/status/*.md`). Snapshot: 2026-10-24.
 
----
+## 1. Summary
 
-## 1. Executive Summary & Scorecard
+| | Count | Notes |
+|---|---|---|
+| Planned tasks | 33 | Y0–Y10, K1–K11, G1–G11 (`docs/tasks/*.md`) |
+| Code merged | 32 | every task except Y0 (device prep, a human task) |
+| Waiting on a human step | 3 | Y0 phone + tunnel, Y7 real-device test, G9 calibration run (needs ≥ 20 genuine sessions) |
+| Cut | 0 | all 8 cut-list items were built (section 3) |
+| Beyond the plan | 4 | judge video ingest, frame deletion on decision, walkthrough, this report |
 
-PulseLens was planned as a 48-hour parallel engineering sprint across three distinct functional tracks:
-1. **Applicant Device / Capture SDK** (Yash)
-2. **Engine, Storage, Console & Evaluation** (Keshav)
-3. **Analysis, Physics & Computer Vision** (Ganeev)
+Tests on `main` at this snapshot: pytest 460 passed, 3 skipped (no model weights); vitest 209 passed; ruff and ESLint clean.
 
-### High-Level Accounting
+Thresholds are **provisional** (physics guesses, not measurements); the console says so on every session (section 5).
 
-| Category | Count | Status | Notes |
+## 2. Per task
+
+### Yash: applicant device and customer screens
+
+| Task | Status | What is merged | PR |
 |---|---|---|---|
-| **Core Tasks Planned** | 32 | — | Y0–Y10, K1–K11, G1–G11 defined in `docs/PLAN.md` |
-| **Fully Built & Merged** | 29 | 90.6% | Merged directly to `main` with passing automated suites |
-| **Additions Beyond Plan** | 4 | 100% | Judge video ingest, post-decision frame purge, walkthrough doc, plan-vs-built doc |
-| **Cut from Scope** | 2 | 6.25% | `pulse.coherence` (rPPG), `turn.identity` (explicitly on Plan Cut List §7) |
-| **Deferred / Awaiting Data** | 1 | 3.1% | G9 Calibration on Set A (requires physical volunteer recordings) |
+| Y0 | **Not done** (human) | `cloudflared` and an Android phone on mobile data; `scripts/dev.py tunnel` exists | — |
+| Y1 | Done | camera, one clock (`performance.now`), frame grabber, JPEG encoder | #19 |
+| Y2 | Done | quality preflight and the mode-switch probe | #21 |
+| Y3 | Done | colour challenge renderer, painted/ended timestamps | #20 |
+| Y4 | Done | batch uploader (retries keep the same `batch_seq`), customer flow v1 | #24 |
+| Y5 | Done | head-turn prompt with the yaw progress ring (guidance only) | #26 |
+| Y6 | Done | coaching tips, no-flash path, English and Hindi | #27 |
+| Y7 | Code done; **device test pending** | fullscreen, portrait lock, wake lock, `100dvh` | #30, #32 |
+| Y8 | Done | `/lab` recording form (pseudonymous P/D codes, consent ref) | #25 |
+| Y9 | Done | fps-drop downgrade, weak-connection notice, camera error states, `?lock=1` exposure lock | #31 |
+| Y10 | Done | Brave e2e: customer, lab, replay attack | #29 |
 
-**Automated Test Health at Code Freeze:**
-- **Python / Pytest:** 428 passed, 4 skipped (model weights / hardware optional), 0 failures.
-- **Web / Vitest:** 177 passed across 16 test files, 0 failures.
-- **Linters (Ruff + ESLint):** Zero errors, zero warnings.
+Integration PRs: #28, #32.
 
----
+### Keshav: engine, console, evidence record, evaluation
 
-## 2. Track Breakdown: Promised vs. Built vs. Cut
+| Task | Status | What is merged | PR |
+|---|---|---|---|
+| K1 | Done | contract (`contracts.py` / `contracts.ts`), `bundle.py`, `scripts/dev.py` | #1 |
+| K2 | Done | sessions API, `SessionStore`, HMAC customer token, size limits | #3 |
+| K3 | Done | planner (CAPABLE / CONSTRAINED / NO_FLASH) and per-nonce challenge | #2 |
+| K4 | Done | analysis runner (errors and timeouts become `analysis.error`) and fake analysis | #15 |
+| K5 | Done | `integrity.protocol` and `integrity.coverage` | #14 |
+| K6 | Done | fusion: usable-only gate, one vote per vote group, PASS / RETRY_STEP_UP / HUMAN_REVIEW | #13 |
+| K7 | Done | agent console: session list, review, timeline, family cards, actions | #18, #23 |
+| K8 | Done | hash-chained `audit.jsonl` and `scripts/verify_audit.py` | #39 |
+| K9 | Done | new-session panel with link, QR and copy | #34 |
+| K10 | Done | eval: AUC per check, APCER/BPCER with Wilson 95% CIs, freeze, report | #16, #37 |
+| K11 | Done | purge of unlabelled sessions after 60 min, console "Reset demo" | #36 |
 
-### Track 1: Applicant Device & Customer Flow (Owner: Yash)
+### Ganeev: analysis
 
-| Task ID | Component Promised | Status | What Was Built & Merged | PR / Commit |
-|---|---|---|---|---|
-| **Y0** | Device Preparation & HTTPS Tunnel | **Done** | Cloudflare tunnel integration via `scripts/dev.py tunnel`, mobile testing harness. | Manual / scripts |
-| **Y1** | Camera, Clock & Frame Grabber | **Done** | Zero-lag canvas-based frame grabber, monotonic millisecond clock (`performance.now()`), JPEG worker pipeline. | PR #14 |
-| **Y2** | Quality Preflight & Mode Probe | **Done** | Front-camera preflight (FPS, lighting, face bounding box, camera capability probe). Graceful degradation on iOS/Safari. | PR #18 |
-| **Y3** | Challenge Renderer & Display | **Done** | Fullscreen challenge overlay, Rec.709 sRGB flash sequences, sub-millisecond paint event timestamps. | PR #20 |
-| **Y4** | Uploader & Customer Flow v1 | **Done** | Batch chunk uploader with exponential backoff, retry queue, customer UI flow. | PR #24 |
-| **Y5** | Head-Turn Guidance Ring | **Done** | Circular arc indicator tracking yaw angle, progressive feedback ring at 20° deflection, text fallback. | PR #26 |
-| **Y6** | Coaching Tips & Bilingual Strings | **Done** | Real-time coaching prompts (dim light, backlight, proximity, blur); English and Hindi strings with auto-detect. | PR #27 |
-| **Y7** | Mobile Hardening | **Done** | Android fullscreen & portrait lock, iOS wake lock re-acquisition, dynamic viewport (`100dvh`). | PR #30 |
-| **Y8** | Lab Recording Screen | **Done** | Operator console (`/lab`) for recording ground-truth dataset with pseudonymised participant codes (Pxx, Dxx). | PR #25 |
-| **Y9** | Capture Hardening & Error States | **Done** | Graceful camera permissions error handling, FPS drop downgrade, manual exposure lock (`?lock=1`). | PR #31 |
-| **Y10** | End-to-End Test Suite | **Done** | Playwright test matrix covering fake camera, customer flow, lab flow, and forbidden word assertions. | PR #29 |
+| Task | Status | What is merged | PR |
+|---|---|---|---|
+| G1 | Done | analysis skeleton, vision base (MediaPipe landmarks, face/neck/background regions), synthetic bundles | #4 |
+| G2 | Done | per-window quality gate | #8 |
+| G3 | Done | `light.response` with the echo helper; weak-echo fix | #7, #35 |
+| G4 | Done | `sensor.cadence`, `sensor.duplicates`; lost-frames fix | #6, #38 |
+| G5 | Done | `light.face_neck`, `light.background` | #9 |
+| G6 | Done | `turn.follow` | #11 |
+| G7 | Code done | `visual.sbi`; **weights not installed**, so it abstains (`visual.model_missing`). Research-only licence | #41 |
+| G8 | Done | `sensor.mode_probe`, `sensor.regions`, `sensor.prnu` (not voting) | #40 |
+| G9 | Code done; **not run** | `scripts/calibrate.py` (genuine set A 97.5th percentile, ≥ 20 per check, never set B) | #95 |
+| G10 | Done | `turn.identity` (votes) and `pulse.coherence` (logged only, never votes) | #90, #94 |
+| G11 | Done | speed (≈ 12 s warm per 900 frames) and nuisance robustness (flicker, glare, JPEG 50) | #81 |
 
----
+### Beyond the plan
 
-### Track 2: Engine, Storage, Console & Evaluation (Owner: Keshav)
+| What | PR |
+|---|---|
+| `scripts/ingest_video.py`: a judge's video file → session bundle → analysis → console | #88 |
+| Raw frames of `/customer` sessions deleted when the agent decides (`delete_frames_on_decision`), `frames.deleted` audit event | #89 |
+| `docs/WALKTHROUGH.md` | #91 |
+| This report | #93 |
 
-| Task ID | Component Promised | Status | What Was Built & Merged | PR / Commit |
-|---|---|---|---|---|
-| **K1** | Scaffold, Dev Script & Contracts | **Done** | `contracts.py` & `contracts.ts`, `bundle.py`, `scripts/dev.py` multi-platform CLI orchestrator. | PR #1 |
-| **K2** | Sessions API & Store | **Done** | FastAPI endpoints, HMAC session authentication, re-entrant read/write locks, 413 payload bounds. | PR #2 |
-| **K3** | Planner & Challenge Generator | **Done** | Pseudo-random nonce seed generator, 3-tier planning engine (CAPABLE, CONSTRAINED, NO_FLASH), safety guards. | PR #12 |
-| **K4** | Analysis Runner & Async Worker | **Done** | Background execution pipeline with thread pool, timeout protection, and synthetic fallback. | PR #13 |
-| **K5** | Ingest Integrity Checks | **Done** | Strict packet protocol verification (`integrity.protocol`) and frame drop/gap analysis (`integrity.coverage`). | PR #15 |
-| **K6** | Decision Fusion & Outcome Matrix | **Done** | Usable-gate evaluation, correlated cue grouping, 3-tier decision engine (PASS, RETRY, HUMAN_REVIEW). | PR #16 |
-| **K7** | Agent Review Console (v1 + v2) | **Done** | Dual-mode operator dashboard (`/console`), evidence thumbnails, interactive uPlot light curves, action logging. | PR #21, #23 |
-| **K8** | Cryptographic Audit Record | **Done** | Tamper-evident SHA-256 hash-chained `audit.jsonl` log, verification CLI `scripts/verify_audit.py`. | PR #39 |
-| **K9** | Customer Launch & QR Pairing | **Done** | Dynamic QR code generation, direct copy links, product flow selector on console. | PR #34 |
-| **K10** | Evaluation Harness & Metrics | **Done** | APCER/BPCER calculations with Wilson 95% confidence intervals, ROC-AUC separation metrics, freeze hashes. | PR #36, #37 |
-| **K11** | Hardening & Retention Purge | **Done** | Inactivity session purge daemon (60 min window), demo state reset switch, secure session isolation. | PR #36 |
-| **Bonus 1** | Judge Video Ingest Script | **Done** | `scripts/ingest_video.py` converts arbitrary video files into live PulseLens session bundles with full check execution. | PR #88 |
-| **Bonus 2** | Privacy Frame Purge | **Done** | Immediate raw frame deletion on agent decision for `/customer` sessions, retaining audit integrity hash. | PR #89 |
-| **Bonus 3** | Comprehensive Walkthrough Doc | **Done** | `docs/WALKTHROUGH.md` covering stages 1–5, architecture diagram, file pointer index table. | PR #91 |
+Also merged: review fixes #42–#57 and #75–#87 (refactors guarded by golden decisions), UI redesign #92.
 
----
+## 3. Cut list (PLAN §7)
 
-### Track 3: Analysis, Physics & Computer Vision (Owner: Ganeev)
+None of the eight items was cut.
 
-| Task ID | Component Promised | Status | What Was Built & Merged | PR / Commit |
-|---|---|---|---|---|
-| **G1** | Vision Base & Landmark Tracking | **Done** | MediaPipe 478-point mesh extraction, canonical face/neck/background ROI segmentation, synthetic bundle generator. | PR #3, #4 |
-| **G2** | Per-Window Quality Gate | **Done** | Temporal window quality assessment (lighting saturation, motion blur, face occlusion, frame rate thresholds). | PR #7, #8 |
-| **G3** | Optical Light Response | **Done** | Constant-fraction onset timing, bandpass echo verification, chromaticity order verification against challenge. | PR #6, #7 |
-| **G4** | Sensor Cadence & Duplicates | **Done** | Monotonic timing jitter analysis, perceptual difference hash (dHash), frame duplicate cluster detection. | PR #4 |
-| **G5** | Differential Light Reflection | **Done** | Skin vs. clothing reflection ratio (`light.face_neck`), ambient back-wall light spill detection (`light.background`). | PR #8, #9 |
-| **G6** | Active Head-Turn Verification | **Done** | 3D head pose estimation, angular yaw velocity tracking, prompt latency validation (`turn.follow`). | PR #11 |
-| **G7** | Self-Blended Images (SBI) Detector | **Done** | EfficientNet-B4 deepfake classifier, aligned face crop extraction, checkpoint weight loading pipeline. | PR #40, #41 |
-| **G8** | Advanced Sensor Diagnostics | **Done** | Virtual camera mode switch probing (`sensor.mode_probe`), spatial region noise analysis (`sensor.regions`), PRNU. | PR #38, #40 |
-| **G9** | Calibration on Real Dataset | **Deferred** | Evaluation code and separation metrics built (`eval/separation.py`), awaiting physical dataset recording. | Deferred |
-| **G10** | Pulse Coherence & Turn Identity | **Cut** | Cut per Plan Section 7 (Cut List items 1 & 2). Rationale documented below. | Cut (§7) |
-| **G11** | Robustness, Glare & Performance | **Done** | Specular highlight clipping, low-quality JPEG tolerance, sub-12s CPU runtime on 900 frames. | PR #41 |
+| Item | Outcome |
+|---|---|
+| 1. `pulse.coherence` | Built (#94), logged only: `voting: false`, never stores a heart rate or waveform |
+| 2. `turn.identity` | Built (#90), votes in `D.identity` |
+| 3. `sensor.prnu` | Built (#40), not voting (`flag` always false) |
+| 4. `light.background` | Built (#9) |
+| 5. Hindi strings | Built (#27); native-speaker check still pending |
+| 6. Exposure lock | Built (#31), `?lock=1` |
+| 7. Evidence-record hash chain | Built (#39) |
+| 8. Lab recording screen | Built (#25) |
 
----
+## 4. Privacy as built
 
-## 3. Plan Cut List: Planned vs. Actual
+- `/customer` session frames are deleted when the agent decides; `/lab` sessions (labelled, consented) are kept for calibration.
+- Unlabelled sessions are purged after 60 minutes.
+- The hash-chained audit record stays; `verify_audit.py` accepts the `frames.deleted` event.
+- No heart rate or pulse waveform is written anywhere; the customer never sees a score, check or outcome (e2e `FORBIDDEN_WORDS`).
 
-Section 7 of `docs/PLAN.md` established a prioritized cut list to protect project completion under time constraints. Here is the exact reconciliation:
+## 5. Known gaps (honest)
 
-| Cut List Item | Description | Planned Fate | Actual Outcome | Technical Rationale |
-|---|---|---|---|---|
-| **1. `pulse.coherence` (Family A)** | Physiological rPPG heartbeat extraction | Cut if behind | **Cut** | rPPG waveforms are highly unreliable under mobile auto-exposure and varying indoor ambient light within 48h. Furthermore, storing or plotting pulse waveforms violates core privacy constraints (AGENTS.md Rule 8). |
-| **2. `turn.identity`** | Multi-angle biometric face matching during turn | Cut if behind | **Cut** | Active head pose velocity and direction (`turn.follow`) provides physical liveness. Multi-pose face matching adds high computational overhead without improving presentation attack detection. |
-| **3. `sensor.prnu`** | Sensor Photo-Response Non-Uniformity | Cut if behind | **Built (Non-Voting)** | Retained as a passive diagnostic check (`voting=False`). Mobile video encoding (H.264/JPEG compression) suppresses subtle high-frequency sensor noise; kept as diagnostic. |
-| **4. `light.background`** | Ambient screen bounce on background wall | Cut if behind | **Built & Merged** | Implemented in G5 (`checks/light_common.py`); effectively discriminates glossy screens from physical rooms. |
-| **5. Hindi strings** | Bilingual customer accessibility | Cut if behind | **Built & Merged** | Full English and Hindi localized string dictionary implemented in Y6 (`web/src/customer/strings.ts`). |
-| **6. Exposure lock** | WebCam hardware exposure freeze (`?lock=1`) | Cut if behind | **Built & Merged** | Added in Y9 (`web/src/capture/camera.ts`) using MediaTrackCapabilities. |
-| **7. Evidence-record hash chain** | SHA-256 cryptographic chaining | Cut if behind | **Built & Merged** | Fully implemented in K8 (`server/pulselens/engine/audit.py`) and verified by `scripts/verify_audit.py`. |
-| **8. Lab recording screen polish** | Ground truth recording UI | Cut if behind | **Built & Merged** | Built in Y8 (`web/src/lab/LabPage.tsx`) with metadata tracking, consent validation, and session export. |
-
----
-
-## 4. Architectural Adherence & Principles
-
-1. **Keep It Simple, Stupid (KISS):**
-   - Pure filesystem storage under `data/sessions/` using standard JSON and JPEG formats. No external database servers or distributed caches required.
-   - Deterministic fusion rules: clear, explainable decision hierarchy instead of opaque end-to-end black box classifiers.
-2. **You Aren't Gonna Need It (YAGNI):**
-   - Strict adherence to the shared `CONTRACT.md` without speculative API fields.
-   - Refusal to prematurely add complex cloud infra; entire stack runs locally with `python scripts/dev.py server` and `python scripts/dev.py web`.
-3. **Privacy First & RBI V-CIP Compliance:**
-   - Raw face frames are immediately purged from disk once an agent reviews a session (`delete_frames_on_decision: true`), leaving only the tamper-evident cryptographic audit trail.
-   - Zero biometric pulse or biometric template data retained.
+- **No calibration yet.** `calibrate.py` needs ≥ 20 genuine set A results per check; we have 3 genuine sessions. Every
+  threshold is provisional.
+- **Small real-data set.** 3 genuine and 8 live-swap (Deep-Live-Cam) recordings, one person and one device; 0 `replay_screen`
+  and 0 `virtual_camera` recordings so far.
+- **Live swaps do not reach HUMAN_REVIEW.** Of the 5 latest live-swap recordings: 4 RETRY_STEP_UP (light too noisy, or the
+  camera under 12 fps so `turn.follow` abstained) and **1 PASS** (a false accept). Fusion rule under discussion in #61.
+- **No phone tested end to end** (Y0, Y7).
+- **SBI weights not installed**, so family D's detector never votes.
+- **Open contract and fusion tickets:** #58–#63.
