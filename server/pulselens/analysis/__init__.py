@@ -16,6 +16,7 @@ from pulselens.analysis.checks import (
     sensor_regions,
     sensor_stream,
     turn_follow,
+    turn_identity,
     visual_sbi,
 )
 from pulselens.analysis.context import AnalysisContext, build_context
@@ -32,7 +33,7 @@ log = logging.getLogger("pulselens.analysis")
 # example the light check when the plan has no light). Every check is wrapped in result.guarded, so none raises.
 CHECKS: tuple[Callable[[AnalysisContext], list[CheckResult]], ...] = (
     sensor_stream.run, sensor_probe.run, sensor_regions.run, sensor_prnu.run, light_response.run, light_face_neck.run,
-    light_background.run, turn_follow.run, visual_sbi.run,
+    light_background.run, turn_follow.run, turn_identity.run, visual_sbi.run,
 )
 
 

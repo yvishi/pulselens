@@ -31,6 +31,21 @@ LANDMARKS_USED: tuple[int, ...] = tuple(
     sorted({FOREHEAD_TOP, CHIN, SIDE_A, SIDE_B, *BROWS, *LOWER_LIDS, *CHEEKS, *LIPS})
 )
 N_LANDMARKS = 478
+# Face proportions for turn.identity: 10 distances between fixed points, in units of the outer eye-corner distance
+# (so they do not change with scale, position or roll). Lip opening is left out: it changes with speech.
+EYE_OUTER_A, EYE_OUTER_B = 33, 263
+GEOMETRY_PAIRS: tuple[tuple[int, int], ...] = (
+    (133, 362),  # inner eye corners
+    (33, 133),  # one eye's width
+    (263, 362),  # the other eye's width
+    (168, 1),  # nose bridge to nose tip
+    (98, 327),  # nose width
+    (61, 291),  # mouth corners
+    (1, 152),  # nose tip to chin
+    (FOREHEAD_TOP, 1),  # forehead to nose tip
+    (SIDE_A, SIDE_B),  # face width
+    (172, 397),  # jaw width
+)
 
 NECK_WIDTH = 0.6  # face widths
 NECK_TOP, NECK_BOTTOM = 0.05, 0.45  # face heights below the chin
@@ -124,6 +139,19 @@ def regions_from_landmarks(lm: Mapping[int, tuple[float, float]], w: int, h: int
         neck_coverage=coverage,
         background_exclude=(face.scaled(BACKGROUND_DILATE), body),
     )
+
+
+def face_geometry(lm: Mapping[int, tuple[float, float]]) -> np.ndarray:
+    """GEOMETRY_PAIRS distances over the outer eye-corner distance; NaN when a point is missing or the eyes coincide."""
+    def dist(a: int, b: int) -> float:
+        if a not in lm or b not in lm:
+            return np.nan
+        return float(np.hypot(lm[a][0] - lm[b][0], lm[a][1] - lm[b][1]))
+
+    unit = dist(EYE_OUTER_A, EYE_OUTER_B)
+    if not unit > 0:
+        return np.full(len(GEOMETRY_PAIRS), np.nan)
+    return np.array([dist(a, b) / unit for a, b in GEOMETRY_PAIRS])
 
 
 def to_pixels(landmarks: Sequence[Sequence[float]], w: int, h: int) -> dict[int, tuple[float, float]]:

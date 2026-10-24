@@ -88,7 +88,9 @@ turn.follow:
 
 turn.identity:
   flag_at: 0.5
-  max_change: 0.15
+  max_change: 0.15           # median relative change of the 10 face proportions; risk 0.5 here
+  frontal_deg: 10            # compare only frames within this of the starting yaw
+  min_frames: 5              # frontal frames needed before and after the turn
 
 visual.sbi:
   flag_at: 0.5               # provisional; G9 sets it from genuine set A
