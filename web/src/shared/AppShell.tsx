@@ -1,7 +1,8 @@
 // The frame around every agent and operator page: the brand, the page links and sign out. Customer pages never get
 // it (a customer must not find the console from their link).
+import { useSyncExternalStore } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { clearPasscode, getPasscode } from "../console/passcode";
+import { clearPasscode, getPasscode, subscribePasscode } from "../console/passcode";
 
 /** The page links, in the order an agent's day runs. */
 export const NAV_LINKS = [
@@ -24,7 +25,7 @@ export function BrandMark() {
 
 export function AppShell() {
   const navigate = useNavigate();
-  const signedIn = getPasscode() !== null;
+  const signedIn = useSyncExternalStore(subscribePasscode, getPasscode) !== null;
   const signOut = () => {
     clearPasscode();
     navigate("/console", { replace: true });

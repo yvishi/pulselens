@@ -197,7 +197,7 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
         </header>
 
         <div className="review-verdict">
-          <OutcomeBanner decision={decision} notes={<Notes provisional={Boolean(decision?.provisional)} fake={fake} />} />
+          <OutcomeBanner decision={decision} state={report.state} notes={<Notes provisional={Boolean(decision?.provisional)} fake={fake} />} />
         </div>
 
         <aside className="review-decide" aria-label="Decision panel">

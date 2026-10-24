@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Decision, Outcome, StepUp } from "../contracts";
+import type { Decision, Outcome, SessionState, StepUp } from "../contracts";
 import { OUTCOME_PLAIN } from "./plain";
 
 /** The system's own code for each outcome. The list page shows it; the verdict shows it as secondary text. */
@@ -21,18 +21,49 @@ export const STEP_UP_PLAIN: Record<StepUp, string> = {
  * The recommendation as a verdict stamp: the plain verdict, what to do next and why. PulseLens recommends; the
  * agent decides. `notes` (the honesty labels) sit under the reasons so they are read with the verdict.
  */
-export function OutcomeBanner({ decision, notes }: { decision: Decision | null; notes?: ReactNode }) {
+/** What the panel says before there is a verdict, by session state: the customer may not have started yet. */
+const WAITING: Partial<Record<SessionState, { title: string; body: string; hint: string }>> = {
+  created: {
+    title: "Waiting for customer",
+    body: "The customer has not opened the link yet.",
+    hint: "Share the link or QR code, and ask them to open it on their phone.",
+  },
+  preflight: {
+    title: "Check in progress",
+    body: "The customer is getting their camera ready.",
+    hint: "Keep the customer on the call.",
+  },
+  capturing: {
+    title: "Check in progress",
+    body: "The customer is doing the check now. It takes about 20 seconds.",
+    hint: "Keep the customer on the call.",
+  },
+  expired: {
+    title: "Link expired",
+    body: "This link expired before the check finished.",
+    hint: "Start a new verification from the Verifications page.",
+  },
+};
+
+const ANALYSING = {
+  title: "Analysing…",
+  body: "The recommendation appears here when the analysis finishes. This usually takes a few seconds.",
+  hint: "Keep the customer on the call until then.",
+};
+
+export function OutcomeBanner({ decision, state, notes }: { decision: Decision | null; state?: SessionState; notes?: ReactNode }) {
   if (!decision) {
+    const w = (state && WAITING[state]) ?? ANALYSING;
     return (
       <section className="verdict verdict-pending card" aria-label="Outcome" aria-busy="true">
         <p className="eyebrow">PulseLens recommendation</p>
         <div className="verdict-top">
           <div className="stamp stamp-pending">
-            <h2>Analysing…</h2>
+            <h2>{w.title}</h2>
           </div>
           <div className="verdict-next">
-            <p>The recommendation appears here when the analysis finishes. This usually takes a few seconds.</p>
-            <p className="muted">Keep the customer on the call until then.</p>
+            <p>{w.body}</p>
+            <p className="muted">{w.hint}</p>
           </div>
         </div>
         {notes}
