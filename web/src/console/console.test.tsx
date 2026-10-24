@@ -243,12 +243,37 @@ describe("ConsoleSession", () => {
     const { container } = at("/console/d79105c5121a3cb3");
     const reverify = await screen.findByRole("button", { name: "Re-verify" });
     await act(async () => fireEvent.click(reverify));
-    expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3" });
+    expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3", no_flash: false });
     expect((await screen.findByRole("link", { name: /customer\/next/ })).getAttribute("href")).toContain("/customer/next?t=tok");
     expect(container.querySelector(".next-link canvas")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
     expect(screen.getByText("New link for the customer")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Watch the new attempt" }).getAttribute("href")).toBe("/console/next");
+  });
+
+  it("re-verify after a no_flash step-up asks for a no-flash attempt", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "no_flash" } });
+    api.postAgentDecision.mockResolvedValue(undefined);
+    api.createSession.mockResolvedValue({ session_id: "next", customer_url: "/customer/next?t=tok" });
+    at("/console/d79105c5121a3cb3");
+    const reverify = await screen.findByRole("button", { name: "Re-verify" });
+    await act(async () => fireEvent.click(reverify));
+    expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3", no_flash: true });
+  });
+
+  it("assisted_kyc step-up shows the bank process and suggests no button", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "assisted_kyc" } });
+    const { container } = at("/console/d79105c5121a3cb3");
+    const banner = await screen.findByRole("region", { name: "Outcome" });
+    expect(banner.textContent).toContain("Follow the bank's assisted-KYC process (branch or business correspondent).");
+    expect(container.querySelector(".choice.is-suggested")).toBeNull();
+  });
+
+  it("agent_checks step-up suggests no button", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "agent_checks" } });
+    const { container } = at("/console/d79105c5121a3cb3");
+    await screen.findByRole("region", { name: "Outcome" });
+    expect(container.querySelector(".choice.is-suggested")).toBeNull();
   });
 
   it("keeps the actions closed until a decision exists", async () => {
