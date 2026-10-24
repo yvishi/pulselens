@@ -9,15 +9,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
-from pydantic import TypeAdapter, ValidationError
 
 from pulselens.api.common import session_or_404, store
 from pulselens.bundle import frame_name, load_bundle
-from pulselens.contracts import AgentDecision, CheckResult, Decision, SessionReport, SessionSummary
+from pulselens.contracts import AgentDecision, SessionReport, SessionSummary
 from pulselens.engine.auth import passcode_ok
 
 router = APIRouter(prefix="/api")
-RESULTS = TypeAdapter(list[CheckResult])
 Passcode = Annotated[str | None, Header(alias="X-Agent-Passcode")]
 
 
@@ -38,11 +36,6 @@ def result(request: Request, session_id: str, x_agent_passcode: Passcode = None)
     session = session_or_404(request, session_id)
     s = store(request)
     bundle = load_bundle(s.path(session_id))
-    try:
-        results = RESULTS.validate_python(s.load(session_id, "results") or [])
-    except ValidationError:
-        results = []
-    decision, agent = s.load(session_id, "decision"), s.load(session_id, "agent")
     return SessionReport(
         session_id=session_id,
         product=session["product"],
@@ -54,9 +47,9 @@ def result(request: Request, session_id: str, x_agent_passcode: Passcode = None)
         challenge=bundle.challenge,
         events=bundle.events,
         frame_count=s.frame_count(session_id),
-        results=results,
-        decision=Decision.model_validate(decision) if decision else None,
-        agent_decision=AgentDecision.model_validate(agent) if agent else None,
+        results=bundle.results,
+        decision=bundle.decision,
+        agent_decision=bundle.agent_decision,
     )
 
 
