@@ -171,6 +171,7 @@ class CheckResult(Model):
     window_id: str | None = None     # "c2", "t0", "all"
     threshold_source: ThresholdSource
     plot: Plot | None = None
+    voting: bool = True              # False: measured, not voting (never flags), so it covers no family in fusion
 
 
 class FamilySummary(Model):

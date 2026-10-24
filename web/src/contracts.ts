@@ -156,6 +156,7 @@ export interface CheckResult {
   window_id?: string | null;
   threshold_source: ThresholdSource;
   plot?: Plot | null;
+  voting?: boolean; // false: measured, not voting (covers no family in fusion)
 }
 
 export interface FamilySummary {

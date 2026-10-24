@@ -69,6 +69,7 @@ def result(
         window_id=window_id,
         threshold_source=t.source(spec.check_id),
         plot=plot,
+        voting=votes,
     )
 
 

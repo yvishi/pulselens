@@ -403,7 +403,8 @@ Input: all `CheckResult`s (integrity + analysis) and the `Plan`.
 2. **Group.** Within a family, results with the same `vote_group` are one vote. The group flags if any member flags. Its risk is the max of the members' risks.
 3. **Family state:**
    - `flag`: at least one group in the family flags.
-   - `not_raised`: at least one usable result and no flags.
+   - `not_raised`: at least one usable result that can vote (`voting` true) and no flags. A measured-only result
+     (`voting` false: SBI, PRNU, pulse, and any check set `voting: false`) is shown but covers no family.
    - `abstained`: results exist, none usable.
    - `not_run`: no results for the family.
 4. **Family A** (pulse) is reported but never votes, in rules 5 and 6 below.
@@ -414,8 +415,13 @@ Input: all `CheckResult`s (integrity + analysis) and the `Plan`.
    | 1 | any result with `status == "protocol_error"` | `HUMAN_REVIEW` | — | `fusion.integrity_violation` |
    | 2 | 2 or more of B, C, D are `flag` | `HUMAN_REVIEW` | — | `fusion.two_families` |
    | 3 | exactly 1 of B, C, D is `flag` | `RETRY_STEP_UP` | `fresh_challenge`; `agent_checks` if mode is `NO_FLASH` or `attempt >= 2` | `fusion.one_family` |
-   | 4 | fewer than 2 of B, C, D have a usable result | `RETRY_STEP_UP` | `no_flash` if C abstained with a `quality.*` light reason and mode is not `NO_FLASH`; else `agent_checks`; `assisted_kyc` if `attempt >= 3` | `fusion.low_coverage` |
-   | 5 | otherwise | `PASS` | — | `fusion.pass` |
+   | 4 | the turn prompt was shown and `turn.follow` abstained with `turn.not_performed` | `RETRY_STEP_UP` | `fresh_challenge`; `agent_checks` if `attempt >= 2` | `fusion.challenge_not_done` |
+   | 5 | fewer than 2 of B, C, D have a usable voting result | `RETRY_STEP_UP` | `no_flash` if C abstained with a `quality.*` light reason and mode is not `NO_FLASH`; else `agent_checks`; `assisted_kyc` if `attempt >= 3` | `fusion.low_coverage` |
+   | 6 | the live challenge is not verified: no usable, unflagged `turn.follow` when the plan runs the turn (else no usable, unflagged `light.response`) | `RETRY_STEP_UP` | as row 5 | `fusion.liveness_not_shown` |
+   | 7 | otherwise | `PASS` | — | `fusion.pass` |
+
+   Rows 4 and 6 (S2): liveness must be shown, not just not disproved. A YouTube face replayed to the camera
+   passed the old table with no flag, because every check that could catch it abstained.
 
 6. `Decision.provisional` is true if any usable result has `threshold_source == "provisional"`. The console then shows the label **PROVISIONAL THRESHOLDS**.
 

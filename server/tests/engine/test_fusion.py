@@ -10,21 +10,39 @@ from pulselens.engine.reason_text import REASON_TEXT
 
 
 def r(family: str, status: str = "usable", flag: bool = False, group: str = "X", *, codes: list[str] | None = None,
-      source: str = "rule", explanation: str | None = None) -> CheckResult:
+      source: str = "rule", explanation: str | None = None, check_id: str | None = None,
+      voting: bool = True) -> CheckResult:
     usable = status == "usable"
     return CheckResult(
-        check_id=f"test.{family.lower()}.{group}", family=family, vote_group=f"{family}.{group}", status=status,
-        risk=(0.9 if flag else 0.1) if usable else None, flag=flag and usable, quality=1.0 if usable else 0.2,
-        reason_codes=codes or [], explanation=explanation or f"{family} {group} {status}{' flag' if flag else ''}.",
-        threshold_source=source,
+        check_id=check_id or f"test.{family.lower()}.{group}", family=family, vote_group=f"{family}.{group}",
+        status=status, risk=(0.9 if flag else 0.1) if usable else None, flag=flag and usable and voting,
+        quality=1.0 if usable else 0.2, reason_codes=codes or [],
+        explanation=explanation or f"{family} {group} {status}{' flag' if flag else ''}.", threshold_source=source,
+        voting=voting,
     )
 
 
-def plan(mode: str = "CAPABLE") -> Plan:
-    return Plan(mode=mode, run_light=mode != "NO_FLASH", run_turn=True, agent_questions=mode == "NO_FLASH", reasons=[])
+def turn(status: str = "usable", flag: bool = False, codes: list[str] | None = None) -> CheckResult:
+    return r("D", status, flag, group="turn", codes=codes, check_id="turn.follow")
 
 
-CLEAN = [r("B"), r("C"), r("D")]
+def light(status: str = "usable", flag: bool = False, codes: list[str] | None = None) -> CheckResult:
+    return r("C", status, flag, group="response", codes=codes, check_id="light.response")
+
+
+def plan(mode: str = "CAPABLE", run_turn: bool = True) -> Plan:
+    return Plan(mode=mode, run_light=mode != "NO_FLASH", run_turn=run_turn, agent_questions=mode == "NO_FLASH",
+                reasons=[])
+
+
+CLEAN = [r("B"), r("C"), turn()]
+NOT_DONE = ["turn.not_performed"]
+# S2: a YouTube face replayed to the camera. Sensor checks clean (a real camera filmed the screen), light answered (the
+# glossy screen reflected the flash), the background and face/neck checks abstained, the turn was not performed,
+# and SBI (measured only) was the only usable result in D. It passed the old table.
+REPLAY = [r("B"), light(), r("C", "abstain", group="relative", codes=["light.background_hidden"]),
+          turn("abstain", codes=NOT_DONE), r("D", group="detector", check_id="visual.sbi", voting=False),
+          r("A", group="pulse", check_id="pulse.coherence", voting=False)]
 
 # (name, results, plan mode, attempt, outcome, step_up)
 CASES = [
@@ -48,15 +66,29 @@ CASES = [
     ("low_coverage_attempt3", [r("B"), r("C", "abstain", codes=["quality.too_dark"])], "CAPABLE", 3,
      "RETRY_STEP_UP", "assisted_kyc"),
     ("nothing_ran", [], "CAPABLE", 1, "RETRY_STEP_UP", "agent_checks"),
-    ("abstain_never_counts", [r("B"), r("C", "abstain"), r("D"), r("C", "abstain", group="relative")], "CAPABLE", 1,
+    ("abstain_never_counts", [r("B"), r("C", "abstain"), turn(), r("C", "abstain", group="relative")], "CAPABLE", 1,
      "PASS", None),
     ("pass", CLEAN, "CAPABLE", 1, "PASS", None),
+    ("replay_with_no_turn_is_a_fresh_challenge", REPLAY, "CAPABLE", 1, "RETRY_STEP_UP", "fresh_challenge"),
+    ("turn_not_done_again_goes_to_the_agent", REPLAY, "CAPABLE", 2, "RETRY_STEP_UP", "agent_checks"),
+    ("measured_only_results_cover_no_family",
+     [r("B"), r("C", "abstain"), r("D", group="detector", check_id="visual.sbi", voting=False)], "CAPABLE", 1,
+     "RETRY_STEP_UP", "agent_checks"),
+    ("no_flags_but_turn_unverified_is_not_a_pass",
+     [r("B"), r("C"), r("D", group="identity"), turn("abstain", codes=["quality.too_dark"])], "CAPABLE", 1,
+     "RETRY_STEP_UP", "agent_checks"),
+    ("without_a_turn_the_light_must_answer", [r("B"), light(), r("D", group="identity")], "CAPABLE_NO_TURN", 1,
+     "PASS", None),
+    ("without_a_turn_and_no_light_answer_is_not_a_pass",
+     [r("B"), light("abstain", codes=["light.weak_face_echo"]), r("C", group="relative"), r("D", group="identity")],
+     "CAPABLE_NO_TURN", 1, "RETRY_STEP_UP", "agent_checks"),
 ]
 
 
 @pytest.mark.parametrize(("name", "results", "mode", "attempt", "outcome", "step_up"), CASES, ids=[c[0] for c in CASES])
 def test_outcome_table(name, results, mode, attempt, outcome, step_up) -> None:
-    d = fuse(results, plan(mode), attempt, decided_at_ms=0)
+    p = plan("CAPABLE", run_turn=False) if mode == "CAPABLE_NO_TURN" else plan(mode)
+    d = fuse(results, p, attempt, decided_at_ms=0)
     assert (d.outcome, d.step_up) == (outcome, step_up)
     assert [f.family for f in d.families] == ["A", "B", "C", "D"]
 
@@ -117,8 +149,8 @@ def test_provisional_flag() -> None:
 
 def test_every_fusion_code_has_text() -> None:
     needed = ["fusion.integrity_violation", "fusion.two_families", "fusion.one_family", "fusion.low_coverage",
-              "fusion.pass"] + [f"fusion.step_up.{s}" for s in ("fresh_challenge", "no_flash", "agent_checks",
-                                                                    "assisted_kyc")]
+              "fusion.challenge_not_done", "fusion.liveness_not_shown", "fusion.pass"]
+    needed += [f"fusion.step_up.{s}" for s in ("fresh_challenge", "no_flash", "agent_checks", "assisted_kyc")]
     assert [c for c in needed if c not in REASON_TEXT] == []
 
 

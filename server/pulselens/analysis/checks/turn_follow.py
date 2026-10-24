@@ -9,7 +9,9 @@ trustworthy there, and poor capture is never attack evidence.
 
 Outcomes, first match wins. The turn itself is judged first, from the frames where the face was seen, so a face that
 drops out for part of a turn that was clearly followed is not held against the person:
-1. turned the wrong way (wrong peak >= 15 degrees, requested peak < 10): usable, risk 1, `turn.wrong_direction`;
+1. turned the wrong way (wrong peak >= 15 degrees, requested peak < 15): usable, risk 1, `turn.wrong_direction`.
+   S2: a YouTube face replayed to the camera moved 24 degrees the wrong way and 12.5 the way asked; the old
+   "requested peak < 10" let it abstain as not performed, and the session passed;
 2. turned the right way (peak >= 15): usable, risk 0; `turn.no_return` when it did not come back within 10 degrees
    by the end (noted, not scored: a person may be slow to turn back);
 3. the face is missing for more than 40% of the window: usable, risk 0.6, `turn.face_lost` (a hypothesis: swaps can
@@ -117,7 +119,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                        explanation=explanation, window_id=step.step_id, plot=plot)]
 
     min_peak = float(ctx.thresholds.param(SPEC.check_id, "min_peak_deg"))
-    if wrong >= min_peak and peak < still:
+    if wrong >= min_peak and peak < min_peak:
         return usable(1.0, ["turn.wrong_direction"],
                       f"Asked to turn {asked}, the head turned {wrong:.0f} degrees the other way and at most "
                       f"{peak:.0f} degrees the way asked.")
@@ -139,6 +141,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [abstain(SPEC, ["quality.no_face"], f"The face was visible in {face_present:.0%} of the turn and "
                         f"moved at most {max(peak, wrong):.0f} degrees.", quality=face_present, features=features,
                         window_id=step.step_id)]
-    return [abstain(SPEC, ["turn.not_performed"], f"The head moved at most {max(peak, wrong):.0f} degrees after the "
-                    f"prompt to turn {asked} (needs {min_peak:.0f} degrees), so the turn was not performed.",
+    return [abstain(SPEC, ["turn.not_performed"], f"After the prompt to turn {asked}, the head moved {peak:.0f} "
+                    f"degrees that way and {wrong:.0f} the other way (needs {min_peak:.0f} degrees the way asked), so "
+                    "the turn was not performed.",
                     quality=face_present, features=features, window_id=step.step_id)]

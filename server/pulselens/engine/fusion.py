@@ -2,9 +2,14 @@
 
 1. Gate: only usable results count. Abstain never counts for or against.
 2. Group: results with the same vote_group are one vote (flags if any member flags).
-3. Family state: flag, not_raised, abstained, not_run.
+3. Family state: flag, not_raised, abstained, not_run. A result that cannot vote (`voting` false: measured only, such
+   as SBI, PRNU, pulse) never makes its family "not_raised": it is shown, but covers nothing.
 4. Family A is reported but never votes.
 5. Outcome: first matching rule wins.
+6. Liveness must be shown, not just not disproved (S2: a YouTube face replayed to the camera passed with no flag,
+   because every check that could catch it abstained). PASS also needs the live challenge verified: the head turn
+   followed when the plan ran one, else the light answered. A turn prompt that was shown but not performed is a
+   fresh challenge, never a pass.
 PulseLens recommends; the agent decides.
 """
 
@@ -35,7 +40,7 @@ FAMILY_NAMES = {"A": "Pulse", "B": "Sensor and stream", "C": "Light challenge", 
 def _family_state(results: list[CheckResult]) -> FamilyState:
     if not results:
         return "not_run"
-    usable = [r for r in results if r.status == "usable"]
+    usable = [r for r in results if r.status == "usable" and r.voting]
     if not usable:
         return "abstained"
     groups: dict[str, bool] = defaultdict(bool)
@@ -68,6 +73,19 @@ def _low_coverage_step_up(
     return "agent_checks"
 
 
+TURN, LIGHT = "turn.follow", "light.response"  # the live challenges: a recording cannot answer them on time
+
+
+def _verified(results: list[CheckResult], check_id: str) -> bool:
+    return any(r.check_id == check_id and r.status == "usable" and not r.flag for r in results)
+
+
+def _turn_skipped(results: list[CheckResult]) -> bool:
+    """The turn prompt was shown, the face was seen, and the head did not turn as asked."""
+    return any(r.check_id == TURN and r.status == "abstain" and "turn.not_performed" in r.reason_codes
+               for r in results)
+
+
 def _outcome(
     results: list[CheckResult], by_family: dict[Family, list[CheckResult]], state: dict[Family, FamilyState],
     plan: Plan | None, attempt: int,
@@ -82,8 +100,14 @@ def _outcome(
     if len(flagged) == 1:
         no_flash = plan is not None and plan.mode == "NO_FLASH"
         return "RETRY_STEP_UP", "fusion.one_family", "agent_checks" if no_flash or attempt >= 2 else "fresh_challenge"
+    if _turn_skipped(results):
+        return "RETRY_STEP_UP", "fusion.challenge_not_done", "agent_checks" if attempt >= 2 else "fresh_challenge"
     if len(covered) < 2:
         return "RETRY_STEP_UP", "fusion.low_coverage", _low_coverage_step_up(by_family["C"], state["C"], plan, attempt)
+    run_turn = plan is None or plan.run_turn
+    if not (_verified(results, TURN) if run_turn else _verified(results, LIGHT)):
+        return "RETRY_STEP_UP", "fusion.liveness_not_shown", _low_coverage_step_up(
+            by_family["C"], state["C"], plan, attempt)
     return "PASS", "fusion.pass", None
 
 

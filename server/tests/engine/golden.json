@@ -3,7 +3,8 @@
   "decision": {
    "outcome": "PASS",
    "reasons": [
-    "Enough usable evidence was captured and none of it raised risk."
+    "The live challenge was verified, enough usable evidence was captured and none of it raised risk.",
+    "Pulse could not judge: "
    ],
    "step_up": null
   },
@@ -116,7 +117,7 @@
   "decision": {
    "outcome": "PASS",
    "reasons": [
-    "Enough usable evidence was captured and none of it raised risk.",
+    "The live challenge was verified, enough usable evidence was captured and none of it raised risk.",
     "Pulse could not judge: The camera delivered 15.0 fps, below the 20 fps a pulse needs. Experimental, not used in the decision; swaps can carry the driver's real pulse (Seibold 2025)."
    ],
    "step_up": null
@@ -233,7 +234,8 @@
   "decision": {
    "outcome": "PASS",
    "reasons": [
-    "Enough usable evidence was captured and none of it raised risk.",
+    "The live challenge was verified, enough usable evidence was captured and none of it raised risk.",
+    "Pulse could not judge: ",
     "Light challenge could not judge: Only 1 of 6 colour steps could be judged on the face (need 4); 2 were too noisy to tell an echo from silence; 3 changed too little to read the colour. Face and neck both answered clearly on 0 of 6 colour steps (need 3); 2 too close to the noise. The face answered the light clearly on only 0 of 6 colour steps (need 3), so there is nothing to compare the background with."
    ],
    "step_up": null
@@ -357,7 +359,8 @@
    "reasons": [
     "One kind of evidence raised risk; a further check is needed before deciding.",
     "Suggested next step: run a fresh challenge.",
-    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would."
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would.",
+    "Pulse could not judge: "
    ],
    "step_up": "fresh_challenge"
   },
@@ -478,7 +481,8 @@
    "reasons": [
     "One kind of evidence raised risk; a further check is needed before deciding.",
     "Suggested next step: run a fresh challenge.",
-    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would. The neck answered the screen light on 5 of 5 colour steps while the face did not, as a face drawn over a real person would. This compares the face with the neck as a hypothesis against live face swaps."
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would. The neck answered the screen light on 5 of 5 colour steps while the face did not, as a face drawn over a real person would. This compares the face with the neck as a hypothesis against live face swaps.",
+    "Pulse could not judge: "
    ],
    "step_up": "fresh_challenge"
   },
@@ -599,7 +603,8 @@
    "reasons": [
     "One kind of evidence raised risk; a further check is needed before deciding.",
     "Suggested next step: run a fresh challenge.",
-    "Light challenge: The face changed colour on 6 of 6 colour steps, but never towards the colour shown, as a recording of another session would."
+    "Light challenge: The face changed colour on 6 of 6 colour steps, but never towards the colour shown, as a recording of another session would.",
+    "Pulse could not judge: "
    ],
    "step_up": "fresh_challenge"
   },
@@ -720,7 +725,8 @@
    "reasons": [
     "Two independent kinds of evidence raised risk, so a person must review it.",
     "Sensor and stream: 100% of frame intervals were within 0.5 ms of 33.3 ms (spread 0.00%), a perfect clock; a hypothesis for virtual cameras. 435 of 446 frames repeated the one before (97.5%; limit 5%).",
-    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would."
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would.",
+    "Pulse could not judge: "
    ],
    "step_up": null
   },
@@ -847,7 +853,8 @@
    "reasons": [
     "One kind of evidence raised risk; a further check is needed before deciding.",
     "Suggested next step: run a fresh challenge.",
-    "Visual and motion: Asked to turn to their right, the head turned 31 degrees the other way and at most 1 degrees the way asked."
+    "Visual and motion: Asked to turn to their right, the head turned 31 degrees the other way and at most 1 degrees the way asked.",
+    "Pulse could not judge: "
    ],
    "step_up": "fresh_challenge"
   },
