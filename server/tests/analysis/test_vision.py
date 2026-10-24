@@ -3,7 +3,7 @@ import pytest
 
 from pulselens.analysis.landmarks import FACE_MODEL
 from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
-from pulselens.analysis.vision.frames import dhash, region_means
+from pulselens.analysis.vision.frames import CLIP_CODE, dhash, region_means
 from pulselens.analysis.vision.linearize import linear_to_srgb, srgb_to_linear
 from pulselens.analysis.vision.pose import rotation_y, yaw_pitch
 from tests.fixtures.synth import H, W, landmarks_478, synthetic_landmarks
@@ -106,7 +106,7 @@ def test_landmarker_runs_and_finds_no_face_in_a_blank_frame() -> None:
 
 def test_region_means_of_a_uint8_frame_equal_linearising_every_pixel_first() -> None:
     rng = np.random.default_rng(1)
-    img = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)
+    img = rng.integers(0, CLIP_CODE, (H, W, 3), dtype=np.uint8)  # blown-out pixels are left out (test_nuisance.py)
     r = regions_from_landmarks(synthetic_landmarks(), W, H)
     fast, slow = region_means(img, r), region_means(srgb_to_linear(img), r)
     for name in fast:

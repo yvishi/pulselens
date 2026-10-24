@@ -9,7 +9,9 @@ turn (the head moves), from 100 ms before a step to 400 ms after it.
   (`ratio_log_tolerance`), one unit per ln 2 (`ratio_log_scale`), from the worse of the two.
 - Reported, not scored: the sharpness ratio face/neck (`sharp_face_neck_ratio`). Skin and a patterned shirt differ in
   texture for real, so it needs genuine data before it can mean anything.
-Abstains when the face moves, the neck is hidden, a region is clipped, or there are too few still frames.
+Abstains when the face moves, the neck is hidden, a region is clipped, there are too few still frames, or the
+video was compressed too hard to keep the sensor noise (JPEG quality under `min_jpeg_quality`, 80; G11: at quality
+50 the encoder wiped the neck's noise to 0 and the ratio flagged a genuine face). The browser sends quality 90.
 """
 
 from __future__ import annotations
@@ -68,6 +70,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         if code in overall.reasons:
             return [abstain(*ids, [code], f"The noise of the face could not be compared: {what}.", window_id="all")]
     p = ctx.thresholds.params(SPEC.check_id)
+    min_q = int(p.get("min_jpeg_quality", 80))
+    if ctx.jpeg_quality is not None and ctx.jpeg_quality < min_q:
+        return [abstain(*ids, ["quality.heavy_compression"], f"The video was compressed too heavily (JPEG quality "
+                        f"about {ctx.jpeg_quality}, need {min_q}) to compare the sensor noise of the face and neck.",
+                        features={"jpeg_quality": ctx.jpeg_quality}, window_id="all")]
     noise, sharp = ctx.noise, ctx.sharpness
     if not noise:
         return [abstain(*ids, ["quality.too_few_frames"], "No region texture was measured.", window_id="all")]

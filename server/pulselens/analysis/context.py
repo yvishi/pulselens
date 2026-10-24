@@ -13,7 +13,7 @@ from pulselens.analysis.landmarks import landmarks_for
 from pulselens.analysis.quality import QualityReport, assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
-from pulselens.analysis.vision.frames import REGION_NAMES, dhash, region_means
+from pulselens.analysis.vision.frames import REGION_NAMES, dhash, jpeg_quality, region_means
 from pulselens.analysis.vision.noise import TEXTURE_REGIONS, linear_green, region_texture
 from pulselens.analysis.vision.prnu import Fingerprint, FingerprintAccumulator
 from pulselens.bundle import Bundle
@@ -43,6 +43,7 @@ class AnalysisContext:
     noise: dict[str, np.ndarray] = field(default_factory=dict)  # temporal noise of linear green vs the previous frame
     sharpness: dict[str, np.ndarray] = field(default_factory=dict)  # variance of the Laplacian of 8-bit green
     fingerprint: Fingerprint | None = None  # PRNU over the usable frames (vision/prnu.py); None below 30 frames
+    jpeg_quality: int | None = None  # the encoder quality of the first readable frame (vision/frames.jpeg_quality)
 
     @property
     def n(self) -> int:
@@ -70,6 +71,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     sharp = {name: np.full(n, np.nan) for name in TEXTURE_REGIONS}
     prev_green: np.ndarray | None = None
     prnu = FingerprintAccumulator()
+    quality_jpeg: int | None = None
     frame_w = 0
     for i, meta in enumerate(bundle.frames):
         img = bundle.read_frame(meta.idx)
@@ -77,7 +79,9 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
             continue
         readable[i] = True
         h, w = img.shape[:2]
-        frame_w = frame_w or w
+        if not frame_w:
+            frame_w = w
+            quality_jpeg = jpeg_quality(bundle.frame_path(meta.idx).read_bytes())
         rgb_u8 = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         h_now, small = dhash(rgb_u8), rgb_u8[::8, ::8].astype(np.int16)
         if prev is not None and prev[1].shape == small.shape:
@@ -115,4 +119,5 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         noise=noise,
         sharpness=sharp,
         fingerprint=prnu.result(),
+        jpeg_quality=quality_jpeg,
     )

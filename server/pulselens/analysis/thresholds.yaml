@@ -56,6 +56,7 @@ sensor.duplicates:
   min_frames: 30
   max_hamming: 2             # dHash bits
   max_mad: 0.5               # mean abs difference, 0..255, on a [::8] pixel grid
+  rel_mad: 0.1               # ... and an exact copy or under this x the session's median difference (G11)
 
 sensor.mode_probe:
   flag_at: 0.7
@@ -67,6 +68,7 @@ sensor.regions:
   ratio_log_tolerance: 0.916 # ln 2.5: face noise within 2.5x of the neck's and background's scores nothing
   ratio_log_scale: 0.693     # ln 2 per score unit beyond that
   min_frames: 20             # still frames with a face
+  min_jpeg_quality: 80       # below this the encoder wipes sensor noise (G11); the browser sends 90
 
 sensor.prnu:
   flag_at: 1.0

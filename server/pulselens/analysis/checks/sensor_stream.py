@@ -9,9 +9,11 @@ camera_duplicates checks.
   (the browser numbers every frame it grabs, so `idx` jumps across the gap; integrity.coverage reports them), and a
   gap spanning the scheduled start of a step the client skipped because the page was hidden (no frames arrive while
   a tab is in the background). Only a gap where `idx` stays consecutive is a stall.
-- duplicates: a frame is a near-duplicate of the previous readable one when their dHashes differ by <= 2 bits and
-  the mean absolute difference on a [::8] pixel grid is < 0.5 (0..255). Relays and virtual cameras repeat frames when
-  they cannot keep up.
+- duplicates: a frame is a near-duplicate of the previous readable one when their dHashes differ by <= 2 bits, the
+  mean absolute difference on a [::8] pixel grid is < 0.5 (0..255), **and** it is an exact copy or stands out
+  against the session's own frame-to-frame change (under `rel_mad`, 0.1, x its median). Relays and virtual cameras
+  repeat frames when they cannot keep up; a still person on a camera whose noise the encoder wiped (G11: JPEG
+  quality 50) changes little between every pair of frames, which is not repetition.
 """
 
 from __future__ import annotations
@@ -137,9 +139,11 @@ def _duplicates(ctx: AnalysisContext) -> CheckResult:
     if n_compared < min_frames:
         return abstain(*_ids(DUPLICATES), ["quality.low_fps"],
                        f"Only {n_compared} frame pairs could be compared; at least {min_frames} are needed.")
+    typical = float(np.median(ctx.mad_prev[compared]))
     with np.errstate(invalid="ignore"):
+        stands_out = (ctx.mad_prev == 0) | (ctx.mad_prev < float(p.get("rel_mad", 0.1)) * typical)
         dup = (compared & (ctx.hamming_prev <= float(p.get("max_hamming", 2)))
-               & (ctx.mad_prev < float(p.get("max_mad", 0.5))))
+               & (ctx.mad_prev < float(p.get("max_mad", 0.5))) & stands_out)
     n_dup = int(dup.sum())
     share = n_dup / n_compared
     max_share = float(p.get("max_share", 0.05))
