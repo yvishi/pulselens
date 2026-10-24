@@ -56,6 +56,15 @@ def test_clean_bundle_is_usable(tmp_path: Path) -> None:
     assert "300 frames" in coverage.explanation
 
 
+
+def test_frames_per_step_uses_the_painted_window(tmp_path: Path) -> None:
+    ch = make_challenge(Plan(mode="CAPABLE", run_light=True, run_turn=True, agent_questions=False, reasons=[]),
+                        "s1", "nonce", rng_for_nonce("nonce"), load_config())
+    late = [ChallengeEvent(step_id=s.step_id, status="shown", painted_t_ms=60_000.0 + s.start_offset_ms,
+                           ended_t_ms=None, shown_rgb=None) for s in ch.steps]  # painted after the last frame
+    _, coverage = run(make(tmp_path, events=late))
+    assert coverage.features["frames_per_step_window"] == 0
+
 def test_non_monotonic_time(tmp_path: Path) -> None:
     rows = [{"idx": i, "t_ms": 100.0 * i, "w": 640, "h": 480, "batch_seq": 0, "received_at_ms": 0} for i in range(60)]
     rows[30]["t_ms"] = 5.0
