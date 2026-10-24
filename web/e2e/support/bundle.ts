@@ -8,6 +8,13 @@ export const API = "http://127.0.0.1:8000";
 export const WEB = "http://localhost:5173";
 export const DATA = path.resolve(import.meta.dirname, "../../../data/e2e");
 
+/**
+ * Words the customer must never see, on screen or in any /api body the customer's browser receives (AGENTS.md rule 4:
+ * no score, family, check id or outcome). Matched case-sensitively, so "PASS" is the outcome, not "passcode".
+ * server/tests/engine mirrors this list for the customer payloads; keep the two the same.
+ */
+export const FORBIDDEN_WORDS = ["risk", "flag", "score", "check_id", "family", "outcome", "PASS"] as const;
+
 export async function createSession(
   request: APIRequestContext,
   body: SessionCreate = {},
