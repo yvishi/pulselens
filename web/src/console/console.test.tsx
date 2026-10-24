@@ -259,6 +259,15 @@ describe("ConsoleSession", () => {
       expect(screen.queryByRole("heading", { name: CARD })).toBeNull();
     });
 
+    it("is hidden once the agent has decided (the ticks live in the saved note)", async () => {
+      api.getResult.mockResolvedValue({
+        ...REPORT, plan: { ...REPORT.plan!, agent_questions: true }, agent_decision: { action: "approve", note: "Live checks: x done" },
+      });
+      at("/console/d79105c5121a3cb3");
+      await screen.findByRole("region", { name: "Your decision" });
+      expect(screen.queryByRole("heading", { name: CARD })).toBeNull();
+    });
+
     it("saves the ticks with the decision note", async () => {
       api.getResult.mockResolvedValue({ ...REPORT, plan: { ...REPORT.plan!, agent_questions: true } });
       api.postAgentDecision.mockResolvedValue(undefined);

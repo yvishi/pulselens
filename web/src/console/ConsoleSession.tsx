@@ -175,7 +175,9 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
 
   const decision = report.decision;
   const fake = report.results.some((r) => r.check_id.startsWith("fake."));
-  const showQuestions = Boolean(report.plan?.agent_questions) || decision?.step_up === "agent_checks";
+  // Hidden once the agent has decided: the ticks are then in the saved note, and fresh boxes would contradict it.
+  const showQuestions = !report.agent_decision
+    && (Boolean(report.plan?.agent_questions) || decision?.step_up === "agent_checks");
   const summaries = new Map(decision?.families.map((f) => [f.family, f]));
   return (
     <Shell sessionId={sessionId} siblings={siblings}>
