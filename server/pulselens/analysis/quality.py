@@ -130,11 +130,9 @@ def _window(window_id: str, mask: np.ndarray, t: np.ndarray, regions: Mapping[st
     return w
 
 
-def assess(t: np.ndarray, regions: Mapping[str, RegionSeries], face_box: np.ndarray, frame_w: int,
-           events: list[ChallengeEvent], challenge: Challenge | None, *,
-           thresholds: Thresholds | None = None) -> QualityReport:
-    """`frame_w` is part of the interface for checks that need pixel limits; motion is measured in face widths."""
-    del frame_w
+def assess(t: np.ndarray, regions: Mapping[str, RegionSeries], face_box: np.ndarray, events: list[ChallengeEvent],
+           challenge: Challenge | None, *, thresholds: Thresholds | None = None) -> QualityReport:
+    """Motion is measured in face widths, so no pixel size is needed."""
     q = (thresholds or Thresholds.load()).params("quality")
     t = np.asarray(t, dtype=np.float64)
     shown = {e.step_id: e for e in events if e.status == "shown" and e.painted_t_ms is not None}

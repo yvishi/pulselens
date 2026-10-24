@@ -54,7 +54,7 @@ def _session(*, fps: float = 30.0, luma: float = 120.0, neck_coverage: float = 1
     for r in regions.values():
         r.rgb_linear[absent] = np.nan
         r.coverage[absent] = 0.0
-    return dict(t=t, regions=regions, face_box=box, frame_w=W, events=events, challenge=ch)
+    return dict(t=t, regions=regions, face_box=box, events=events, challenge=ch)
 
 
 def test_a_clean_session_is_usable_in_every_window() -> None:

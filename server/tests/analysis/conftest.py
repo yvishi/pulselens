@@ -47,7 +47,7 @@ class Synth:
 
 def requalify(ctx: AnalysisContext) -> AnalysisContext:
     """Reruns the quality gate after a test changed the context's region series, face box or events."""
-    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.frame_w, ctx.bundle.events, ctx.bundle.challenge,
+    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.bundle.events, ctx.bundle.challenge,
                          thresholds=ctx.thresholds)
     return ctx
 

@@ -90,13 +90,15 @@ def test_a_check_that_raises_becomes_an_abstain(genuine: Path, monkeypatch: pyte
     def broken(ctx):
         raise ValueError("boom")
 
-    def unguarded(ctx):
-        raise RuntimeError("no guard")
-
-    monkeypatch.setattr(analysis, "CHECKS", [broken, unguarded])
+    monkeypatch.setattr(analysis, "CHECKS", (broken,))
     results = analyze(genuine)
     assert [r.check_id for r in results] == ["sensor.cadence", "sensor.duplicates"]
     assert all(r.status == "abstain" and r.reason_codes == ["quality.check_error"] for r in results)
+
+
+def test_every_check_is_guarded() -> None:
+    # analyze() has no try around the checks: result.guarded is what keeps a check from raising.
+    assert all(hasattr(check, "__wrapped__") for check in analysis.CHECKS)
 
 
 def test_result_flags_only_at_the_threshold_and_clips_risk() -> None:
