@@ -57,7 +57,7 @@ def test_runner_with_fake(store: SessionStore, pool) -> None:
     assert (folder / "decision.json").exists() and store.get(folder.name)["state"] == "done"
     results = json.loads((folder / "results.json").read_text())
     ids = [r["check_id"] for r in results]
-    assert ids == ["integrity.protocol", "integrity.coverage", "fake.b", "fake.c", "fake.d"]
+    assert ids == ["integrity.protocol", "integrity.coverage", "fake.b", "fake.c", "turn.follow"]
     assert all(r["explanation"] == fake_analysis.EXPLANATION for r in results if r["check_id"].startswith("fake."))
 
 

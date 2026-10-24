@@ -195,7 +195,7 @@ def test_freeze_detects_change(tmp_path: Path) -> None:
 def vote_session() -> EvalSession:
     results = [usable("sensor.flag", "72% of frames repeated.", risk=0.9, flag=True),
                usable("light.ok", "Light matched.", family="C", vote_group="C.light"),
-               usable("visual.ok", "Motion looked live.", family="D", vote_group="D.motion")]
+               usable("turn.follow", "Motion looked live.", family="D", vote_group="D.motion")]
     return EvalSession(session_id="v1", label=Label(**label()), mode=None, results=results, decision=None,
                        completed_at_ms=None)
 
@@ -214,7 +214,8 @@ def test_voting_off_drops_vote() -> None:
 
 
 def _fam(family: str, flag: bool = False) -> CheckResult:
-    return usable(f"t.{family.lower()}", f"{family} says so.", risk=0.9 if flag else 0.1, flag=flag, family=family,
+    cid = "turn.follow" if family == "D" else f"t.{family.lower()}"  # fusion passes only a verified live challenge
+    return usable(cid, f"{family} says so.", risk=0.9 if flag else 0.1, flag=flag, family=family,
                   vote_group=f"{family}.x")
 
 
