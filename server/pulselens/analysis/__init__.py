@@ -18,6 +18,7 @@ from pulselens.analysis.checks import (
     sensor_stream,
     turn_follow,
     turn_identity,
+    visual_edge_flicker,
     visual_sbi,
 )
 from pulselens.analysis.context import AnalysisContext, build_context
@@ -36,6 +37,7 @@ CHECKS: tuple[Callable[[AnalysisContext], list[CheckResult]], ...] = (
     sensor_stream.run, sensor_probe.run, sensor_regions.run, sensor_prnu.run, light_response.run, light_face_neck.run,
     light_background.run, turn_follow.run, turn_identity.run, visual_sbi.run,
     pulse_coherence.run,
+    visual_edge_flicker.run,
 )
 
 

@@ -216,6 +216,7 @@ def make_session(
     pulse: float = 0.0,
     pulse_hz: float = 1.2,
     face_pulse_hz: float | None = None,
+    edge_flicker: float = 0.0,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -239,7 +240,10 @@ def make_session(
     a face that comes back from the turn with other proportions (G10, turn.identity).
     `pulse`: the depth of a blood-volume pulse in the face and the neck skin (0.01 = 1%, PBV-weighted per channel),
     at `pulse_hz`; `face_pulse_hz` gives the face its own rate (a swap driven by another person's face). The neck
-    box stands for neck skin here, as the old repo's neck region did (G10, pulse.coherence)."""
+    box stands for neck skin here, as the old repo's neck region did (G10, pulse.coherence).
+    `edge_flicker`: extra per-frame pixel noise of this depth (linear, like `noise`) only in a band along the face
+    box's edge (inside the box, outside the box shrunk to 0.8): a blend boundary that flickers (G12,
+    visual.edge_flicker)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -299,6 +303,12 @@ def make_session(
                 field = field.copy()
                 field[fy0:fy1, fx0:fx1] *= np.float32(face_pixel_noise_gain)
             img += field
+        if edge_flicker and face_in_frames:
+            band = np.zeros((H, W), dtype=bool)
+            band[fy0:fy1, fx0:fx1] = True
+            dy, dx = round(0.1 * (fy1 - fy0)), round(0.1 * (fx1 - fx0))
+            band[fy0 + dy:fy1 - dy, fx0 + dx:fx1 - dx] = False
+            img[band] += _noise_field(rng)[band] * np.float32(edge_flicker)
         if ripple is not None:
             img *= np.float32(ripple[i])
         if glare and face_in_frames:

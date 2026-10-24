@@ -52,6 +52,8 @@ REASON_TEXT: dict[str, str] = {
     "turn.identity_change": "The face's proportions changed through the turn.",
     "visual.model_missing": "The SBI detector weights are not installed.",
     "visual.sbi_high": "The deepfake detector scored the face as likely manipulated.",
+    "visual.edge_flicker_high": "The edge of the face changed more from frame to frame than its middle "
+                                "(measured, not scored).",
     # family A: pulse (G10, logged only)
     "pulse.not_measured": "Pulse coherence needs steady, well-lit video at 20 fps or more.",
 }

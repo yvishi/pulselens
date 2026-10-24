@@ -111,3 +111,15 @@ pulse.coherence:
   min_seconds: 10            # of steady video outside the colour steps, gaps bridged (G10 task)
   max_fill_ms: 1000          # a gap up to this (a colour step, a head movement) is bridged; longer ends the span
   light_tail_ms: 200         # frames this long after a colour step still carry the screen's light
+
+visual.edge_flicker:
+  flag_at: 0.5
+  voting: false              # measured, not voting (G12): a hypothesis with no real swap to test it on yet
+  ratio_tolerance: 1.5       # edge / inner-face frame-to-frame change; 15 real genuine sessions (G12): 0.73-1.16
+  ratio_scale: 1.0           # ratio units per risk unit beyond that: risk 0.5 at 2.0
+  ring_inner: 0.85           # the edge ring, as scales of the ellipse inscribed in the landmark face box
+  ring_outer: 1.0            # ... up to the contour, not beyond it (hair and background stay out)
+  stride: 2                  # every 2nd pair of consecutive still frames ...
+  max_pairs: 150             # ... at most this many (two JPEG reads each)
+  min_pairs: 20
+  min_jpeg_quality: 80       # below this the encoder wipes the smooth skin's noise first (G11)
