@@ -95,6 +95,8 @@ export interface CaptureSessionDeps {
   createUploader: (opts: UploaderOptions) => SessionUploader;
   runChallenge: typeof runChallenge;
   createCoachMeter: (video: HTMLVideoElement) => CoachMeter;
+  /** the session's one face tracker (null when it cannot load), shared by preflight, coaching and the turn prompt */
+  faceTracker: () => Promise<FaceTracker | null>;
   /** whether to try the exposure lock (the ?lock=1 experiment) */
   shouldLock: (pf: Preflight) => boolean;
   lockForLight: (track: MediaStreamTrack, fps: number | null) => Promise<{ lock: CameraLock | null; restore: () => Promise<void> }>;
@@ -128,7 +130,7 @@ export const WEAK_AFTER_FAILED_BATCHES = 2;
 
 const DEFAULT_TURN_TEXT = (dir: TurnDirection) => `Turn your head to your ${dir.toUpperCase()}, then back to the centre`;
 
-/** One face tracker per page, shared by the preflight and the coaching meter (loading it twice is slow). */
+/** One face tracker per page, shared by the preflight, the coaching meter and the turn prompt (loading it twice is slow). */
 let sharedTracker: Promise<FaceTracker | null> | null = null;
 const faceTracker = () => (sharedTracker ??= createFaceTracker().catch(() => null));
 
@@ -149,6 +151,7 @@ export const defaultDeps = (): CaptureSessionDeps => ({
   createUploader: (opts) => new FrameUploader(opts),
   runChallenge,
   createCoachMeter: (video) => createCoachMeter(video, faceTracker()),
+  faceTracker,
   shouldLock: (pf) => typeof location !== "undefined" && shouldLock(pf, location.search),
   lockForLight,
   now,
@@ -296,7 +299,7 @@ export class CaptureSession {
     }));
     grabber.start();
     const showTurnPrompt = (this.opts.turnPrompt ?? textTurnPrompt)({
-      overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT,
+      overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT, faceTracker: d.faceTracker,
     });
     const fpsDrop = fpsDropSkip(grabber);
     const shouldSkipLight = () =>

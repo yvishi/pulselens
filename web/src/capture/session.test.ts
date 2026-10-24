@@ -88,6 +88,7 @@ function stubs(over: Partial<CaptureSessionDeps> = {}) {
       return EVENTS;
     }),
     createCoachMeter: vi.fn(() => ({ measure: vi.fn(async () => GOOD) })),
+    faceTracker: vi.fn(async () => null),
     shouldLock: vi.fn(() => false),
     lockForLight: vi.fn(async () => {
       log.push("lock");
@@ -135,6 +136,21 @@ describe("CaptureSession", () => {
     expect(phases()).toEqual(["camera", "preflight", "challenge", "uploading", "waiting", "result"]);
     expect(states.at(-1)).toMatchObject({ phase: "result", detail: "continue" });
     expect(st.grabberOpts()).toMatchObject({ size: [640, 480], t0: 1234 });
+  });
+
+  it("hands the session's one face tracker to the turn prompt", async () => {
+    const st = stubs();
+    const turnPrompt = vi.fn(() => async () => ({ painted: 0, ended: 0 }));
+    const s = new CaptureSession({
+      sessionId: "s1", token: "tok", video: document.createElement("video"), overlayRoot: document.body,
+      onState: () => undefined, deps: st.deps, turnPrompt,
+    });
+    const done = s.start(false);
+    await vi.advanceTimersByTimeAsync(0);
+    st.releaseFlush();
+    await vi.runAllTimersAsync();
+    await done;
+    expect(turnPrompt).toHaveBeenCalledWith(expect.objectContaining({ faceTracker: st.deps.faceTracker }));
   });
 
   it("feeds every grabbed frame to the uploader", async () => {
