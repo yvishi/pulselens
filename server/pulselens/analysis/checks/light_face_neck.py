@@ -8,7 +8,7 @@ weaker than the neck's. Per colour step, echo onsets and amplitudes for the face
 - neck only: the neck's echo is clear and the face is *clearly* silent. Silent needs a face threshold low enough to
   hear a quarter of the neck's echo (the weakest real face/neck ratio, exp(-ratio_log_tolerance)); otherwise the step
   is unclear and counts for neither side (the old repo's fix, after a darker exposure-locked face was misread). A face
-  whose mean change over the step still pushes towards the colour shown (`faint_z` standard errors, echo.hold_z)
+  whose mean change over the step still pushes towards the colour shown (`echo.faint_z` standard errors, echo.hold_z)
   answered faintly, under weak light, and is unclear too (issue #17).
 Risk 1 when at least `neck_only_steps` (2) steps are neck only and they are at least half of the measured steps
 (kept from the old repo, so one odd step cannot flag a genuine person). Otherwise risk grows from |ln median ratio|
@@ -62,7 +62,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     min_snr = float(ctx.thresholds.param(SPEC.check_id, "min_snr"))
     tol = float(ctx.thresholds.param(SPEC.check_id, "ratio_log_tolerance"))
     ratio_floor = math.exp(-tol)  # the weakest face/neck ratio a real face shows
-    faint_z = float(ctx.thresholds.param(SPEC.check_id, "faint_z"))
+    faint_z = float(ctx.thresholds.param("echo", "faint_z"))
     ratios, deltas = [], []
     neck_only = face_only = weak = unclear = poor = measured = 0
     events = colour_events(ctx)

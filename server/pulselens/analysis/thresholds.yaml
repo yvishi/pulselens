@@ -16,6 +16,9 @@ quality:
 echo:
   a_min: 0.003               # smallest projection on the colour direction (chromaticity units) that counts as an echo
   delay_band_ms: [0, 300]
+  faint_z: 2.5               # a face whose mean push towards the colour shown is >= this many standard errors
+                             # answered faintly (weak light), not silence (issue #17). light.response pools the
+                             # steps without an echo; light.face_neck reads one step
 
 light.response:
   flag_at: 0.5               # fewer than half the steps answered
@@ -23,8 +26,6 @@ light.response:
   min_cosine: 0.5            # measured vs expected colour direction
   max_silent_threshold: 0.012  # 4x echo.a_min: a step with no echo whose 4-sigma threshold is above this cannot
                                # be called silent (unclear). A guess: check against real bright-room webcams at S2
-  faint_echo_z: 2.5          # steps without an echo, pooled: a mean push towards the colours of >= this many
-                             # standard errors means a faint echo (unclear), not silence (issue #17)
   order_min_snr: 2.0         # a colour change must reach this x its threshold before a wrong direction counts
 
 light.face_neck:
@@ -34,8 +35,6 @@ light.face_neck:
   ratio_log_tolerance: 1.386 # ln 4: skin and shirt reflect differently, so up to 4x either way scores nothing
   ratio_log_scale: 0.693     # ln 2 per score unit beyond that
   neck_only_steps: 2
-  faint_z: 3.0               # a face whose mean change over a step pushes towards the colour by >= this many standard
-                             # errors answered faintly: not silent, so not neck-only (issue #17)
 
 light.background:
   flag_at: 0.5
