@@ -102,3 +102,7 @@ visual.sbi:
 pulse.coherence:
   flag_at: 1.0
   voting: false              # logged only
+  min_fps: 20
+  min_seconds: 10            # of steady video outside the colour steps, gaps bridged (G10 task)
+  max_fill_ms: 1000          # a gap up to this (a colour step, a head movement) is bridged; longer ends the span
+  light_tail_ms: 200         # frames this long after a colour step still carry the screen's light
