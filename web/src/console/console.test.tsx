@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   postAgentDecision: vi.fn(),
   createSession: vi.fn(),
 }));
+vi.mock("qrcode", () => ({ default: { toCanvas: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../api/client", async (orig) => ({ ...(await orig<typeof import("../api/client")>()), ...api }));
 
 const { ApiError } = await import("../api/client");
@@ -168,11 +169,13 @@ describe("ConsoleSession", () => {
     api.getResult.mockResolvedValue(REPORT);
     api.postAgentDecision.mockResolvedValue(undefined);
     api.createSession.mockResolvedValue({ customer_url: "/customer/next?t=tok" });
-    at("/console/d79105c5121a3cb3");
+    const { container } = at("/console/d79105c5121a3cb3");
     const reverify = await screen.findByRole("button", { name: "Re-verify" });
     await act(async () => fireEvent.click(reverify));
     expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", previous_session_id: "d79105c5121a3cb3" });
     expect((await screen.findByRole("link", { name: /customer\/next/ })).getAttribute("href")).toContain("/customer/next?t=tok");
+    expect(container.querySelector(".next-link canvas")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
   });
 
   it("keeps the actions closed until a decision exists", async () => {
