@@ -9,9 +9,10 @@ from __future__ import annotations
 from statistics import median
 
 from pulselens.bundle import Bundle
-from pulselens.contracts import CheckResult, ColourStep
+from pulselens.contracts import CheckResult
 from pulselens.engine.reason_text import reason_text
 from pulselens.engine.results import abstain, protocol_error, usable
+from pulselens.engine.steps import step_window
 
 MIN_FRAMES = 50
 FLAG_AT = 0.2  # share of missing upload batches
@@ -55,11 +56,11 @@ def _frames_per_step(bundle: Bundle) -> float | None:
     ch = bundle.challenge
     if ch is None or not ch.steps:
         return None
+    events = {e.step_id: e for e in bundle.events}
     counts = []
     for s in ch.steps:
-        start = ch.baseline_ms + s.start_offset_ms
-        end = start + (s.dwell_ms if isinstance(s, ColourStep) else s.duration_ms)
-        counts.append(sum(start <= f.t_ms < end for f in bundle.frames))
+        w = step_window(ch, s, events.get(s.step_id))
+        counts.append(sum(w.start_ms <= f.t_ms < w.end_ms for f in bundle.frames))
     return float(median(counts))
 
 
