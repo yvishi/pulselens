@@ -32,10 +32,12 @@ def _register() -> None:
         sensor_regions,
         sensor_stream,
         turn_follow,
+        visual_sbi,
     )
 
     CHECKS.extend([sensor_stream.run, sensor_probe.run, sensor_regions.run, sensor_prnu.run, light_response.run,
-                   light_face_neck.run, light_background.run, turn_follow.run])
+                   light_face_neck.run, light_background.run, turn_follow.run,
+                   visual_sbi.run])
 
 
 _register()
