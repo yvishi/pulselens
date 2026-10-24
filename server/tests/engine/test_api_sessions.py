@@ -242,7 +242,7 @@ def test_exact_resend_is_an_idempotent_no_op(client: TestClient, tmp_path: Path,
     protocol = protocol_of(tmp_path, s)
     assert protocol.status != "protocol_error" and "integrity.duplicate_index" not in protocol.reason_codes
     plan = Plan.model_validate(json.loads((tmp_path / "data" / s["session_id"] / "plan.json").read_text()))
-    decision = fuse([protocol], plan, 1)
+    decision = fuse([protocol], plan, 1, decided_at_ms=0)
     assert not decision.integrity_violation and "fusion.integrity_violation" not in decision.reasons
 
 

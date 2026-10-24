@@ -37,7 +37,7 @@ def test_save_analysis_writes_both_files_audits_and_finishes(tmp_path: Path) -> 
     store = SessionStore(tmp_path / "data")
     sid = store.create(SessionCreate()).session_id
     results = [usable("B.one", "first check"), usable("B.two", "second check", risk=0.2)]
-    decision = fuse(results, None, 1)
+    decision = fuse(results, None, 1, decided_at_ms=0)
 
     store.save_analysis(sid, results, decision)
 

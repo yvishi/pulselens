@@ -202,7 +202,7 @@ def vote_session() -> EvalSession:
 
 def test_refuse_matches_fuse() -> None:
     s = vote_session()
-    assert refuse(s, set()).outcome == fuse(s.results, None, 1).outcome == "RETRY_STEP_UP"
+    assert refuse(s, set()).outcome == fuse(s.results, None, 1, decided_at_ms=0).outcome == "RETRY_STEP_UP"
 
 
 def test_voting_off_drops_vote() -> None:

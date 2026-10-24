@@ -30,7 +30,9 @@ def wilson(x: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 def refuse(s: EvalSession, voting_off: set[str]) -> Decision:
     """Re-run fusion on a session's stored results with the "measured, not voting" checks dropped first."""
-    return fuse([r for r in s.results if r.check_id not in voting_off], s.plan, s.attempt)
+    decided_at_ms = s.decision.decided_at_ms if s.decision else 0
+    return fuse([r for r in s.results if r.check_id not in voting_off], s.plan, s.attempt,
+                decided_at_ms=decided_at_ms)
 
 
 @dataclass(frozen=True)
