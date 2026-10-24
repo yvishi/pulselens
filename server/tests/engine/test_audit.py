@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from pulselens.api.main import create_app
 from pulselens.config import Settings
 from pulselens.engine.audit import GENESIS, append, canonical_json, verify
-from tests.engine.api import SyncExecutor
+from tests.engine.api import JPEG, PREFLIGHT, SyncExecutor
 
 
 def _lines(session_dir: Path) -> list[dict]:
@@ -120,11 +120,6 @@ def test_garbage_line_detected(tmp_path: Path) -> None:
 
 
 def test_api_flow_writes_events_in_order(tmp_path: Path) -> None:
-    jpeg = b"\xff\xd8\xff\xd9"
-    pre = {"user_agent": "t", "platform": "desktop", "browser": "b", "camera_label": "c", "width": 640,
-           "height": 480, "measured_fps": 30.0, "dropped_frame_ratio": 0.0, "blur": 1.0, "brightness": 120.0,
-           "face_found": True, "face_fraction": 0.1, "controls": [], "gyro": False, "no_flash_requested": False,
-           "clock": "now", "probe": []}
     settings = Settings(agent_passcode="agent-pc", data_dir=tmp_path / "data", fake_analysis=True)
     agent = {"X-Agent-Passcode": "agent-pc"}
 
@@ -132,14 +127,14 @@ def test_api_flow_writes_events_in_order(tmp_path: Path) -> None:
         idxs = range(seq * 20, seq * 20 + 20)
         meta = {"batch_seq": seq, "frames": [{"idx": i, "t_ms": 33.3 * i, "w": 640, "h": 480} for i in idxs]}
         r = client.post(f"/api/sessions/{sid}/frames", headers=h, data={"meta": json.dumps(meta)},
-                        files={f"f{i}": (f"{i}.jpg", jpeg, "image/jpeg") for i in idxs})
+                        files={f"f{i}": (f"{i}.jpg", JPEG, "image/jpeg") for i in idxs})
         assert r.status_code == 204, r.text
 
     with TestClient(create_app(settings, executor=SyncExecutor())) as client:
         s = client.post("/api/sessions", json={}).json()
         sid = s["session_id"]
         h = {"Authorization": f"Bearer {s['customer_token']}"}
-        assert client.post(f"/api/sessions/{sid}/preflight", headers=h, json=pre).status_code == 200
+        assert client.post(f"/api/sessions/{sid}/preflight", headers=h, json=PREFLIGHT).status_code == 200
         assert client.get(f"/api/sessions/{sid}/challenge", headers=h).status_code == 200
         post_batch(client, sid, h, 0)
         post_batch(client, sid, h, 1)
