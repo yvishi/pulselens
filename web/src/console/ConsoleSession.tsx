@@ -4,6 +4,7 @@ import { getResult, listSessions } from "../api/client";
 import type { Family, Platform, SessionReport } from "../contracts";
 import { HonestyLabel } from "../shared/HonestyLabel";
 import { AgentActions } from "./AgentActions";
+import { AgentQuestions, checksNote, pickQuestions } from "./AgentQuestions";
 import "./console.css";
 import { EvidenceFrames } from "./EvidenceFrames";
 import { FamilyAnswers, FamilyCard } from "./FamilyCard";
@@ -94,7 +95,7 @@ function Journey({ report }: { report: SessionReport }) {
             {plan.reasons.map((code) => (
               <li key={code}>{modeReason(code)}</li>
             ))}
-            {plan.agent_questions && <li>The agent should ask the customer a few questions on the call.</li>}
+            {plan.agent_questions && <li>Ask the customer the live questions in the decision panel.</li>}
           </ul>
         </>
       ) : (
@@ -142,6 +143,8 @@ function Shell({ sessionId, siblings, children }: { sessionId: string; siblings:
 
 function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; passcode: string; onUnauthorized: () => void }) {
   const [actions, setActions] = useState(0); // bumped after an agent action, to fetch the report again
+  const [questions] = useState(() => pickQuestions());
+  const [done, setDone] = useState(() => questions.map(() => false));
   const siblings = useSiblings(sessionId, passcode);
   const { value: report, error: pollError } = usePoll(() => getResult(sessionId, passcode), POLL_MS, {
     done: (r) => r.decision !== null, // decided: nothing changes until the agent acts
@@ -172,6 +175,9 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
 
   const decision = report.decision;
   const fake = report.results.some((r) => r.check_id.startsWith("fake."));
+  // Hidden once the agent has decided: the ticks are then in the saved note, and fresh boxes would contradict it.
+  const showQuestions = !report.agent_decision
+    && (Boolean(report.plan?.agent_questions) || decision?.step_up === "agent_checks");
   const summaries = new Map(decision?.families.map((f) => [f.family, f]));
   return (
     <Shell sessionId={sessionId} siblings={siblings}>
@@ -202,9 +208,13 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
 
         <aside className="review-decide" aria-label="Decision panel">
           <div className="decide-sticky">
+            {showQuestions && (
+              <AgentQuestions questions={questions} done={done} onToggle={(i) => setDone((d) => d.map((v, k) => (k === i ? !v : v)))} />
+            )}
             <AgentActions sessionId={report.session_id} product={report.product} passcode={passcode}
               hasDecision={Boolean(decision)} recorded={report.agent_decision} outcome={decision?.outcome ?? null}
               stepUp={decision?.step_up ?? null} customerNoFlash={report.preflight?.no_flash_requested}
+              checksNote={showQuestions ? checksNote(questions, done) : undefined}
               onRecorded={() => setActions((n) => n + 1)} />
           </div>
         </aside>
