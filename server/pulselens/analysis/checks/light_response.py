@@ -10,7 +10,7 @@ A step that cannot be judged either way is unclear and left out, so weak or nois
 retry, never a flag (AGENTS.md rule 3; issue #17, a genuine bright-room webcam session that was flagged):
 - "noisy": no echo, and the noise threshold could not have heard one: above half the median echo of the session's
   answered steps, or above `max_silent_threshold` (the old repo's "unclear vs silent" fix);
-- "faint": no echo, but the steps without one, pooled, still push towards the colours shown (`faint_echo_z` >=
+- "faint": no echo, but the steps without one, pooled, still push towards the colours shown (`echo.faint_z` >=
   2.5 standard errors): the face answered below the onset threshold, as under weak light, which a recording that
   never saw this screen does not;
 - "weak_colour": an echo, but its colour change is under `order_min_snr` x its threshold, too small to read its
@@ -107,7 +107,7 @@ def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
     hear = float(ctx.thresholds.param(SPEC.check_id, "max_silent_threshold"))
     if amps:
         hear = min(hear, 0.5 * float(np.median(amps)))
-    faint = (z := faint_echo_z(out)) is not None and z >= float(ctx.thresholds.param(SPEC.check_id, "faint_echo_z"))
+    faint = (z := faint_echo_z(out)) is not None and z >= float(ctx.thresholds.param("echo", "faint_z"))
     for s in out:
         if s.answered and not s.order_ok and not s.strong:
             s.unclear = "weak_colour"  # an echo, but too small a colour change to read its direction
