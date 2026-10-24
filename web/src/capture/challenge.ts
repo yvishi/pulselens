@@ -84,5 +84,8 @@ export async function runChallenge(ch: Challenge, deps: ChallengeDeps): Promise<
     events.push({ step_id: step.step_id, status: "shown", painted_t_ms: painted, ended_t_ms: ended, shown_rgb: rgb,
       skip_reason: null });
   }
+  // Keep the grabber running to the challenge's end (the server's tail after the last step): a head still coming
+  // back from the turn is recorded instead of cut off at the prompt's end.
+  await sleepUntil(stepsStart + ch.total_ms);
   return events;
 }

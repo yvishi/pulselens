@@ -77,7 +77,7 @@
     "check_id": "light.background",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.040217233,
+    "risk": 0.050515617,
     "status": "usable"
    },
    {
@@ -107,7 +107,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.691807916,
+    "risk": 0.469364564,
     "status": "usable"
    }
   ]
@@ -191,7 +191,7 @@
     "check_id": "light.background",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.050746266,
+    "risk": 0.037836432,
     "status": "usable"
    },
    {
@@ -234,7 +234,7 @@
    "outcome": "PASS",
    "reasons": [
     "Enough usable evidence was captured and none of it raised risk.",
-    "Light challenge could not judge: Only 0 of 6 colour steps could be judged on the face (need 4); 3 were too noisy to tell an echo from silence; 3 changed too little to read the colour. Face and neck both answered clearly on 0 of 6 colour steps (need 3); 2 too close to the noise. The face answered the light clearly on only 0 of 6 colour steps (need 3), so there is nothing to compare the background with."
+    "Light challenge could not judge: Only 1 of 6 colour steps could be judged on the face (need 4); 2 were too noisy to tell an echo from silence; 3 changed too little to read the colour. Face and neck both answered clearly on 0 of 6 colour steps (need 3); 2 too close to the noise. The face answered the light clearly on only 0 of 6 colour steps (need 3), so there is nothing to compare the background with."
    ],
    "step_up": null
   },
@@ -346,7 +346,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.879798241,
+    "risk": 0.786799492,
     "status": "usable"
    }
   ]
@@ -467,7 +467,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.787035046,
+    "risk": 0.739902095,
     "status": "usable"
    }
   ]
@@ -478,7 +478,7 @@
    "reasons": [
     "One kind of evidence raised risk; a further check is needed before deciding.",
     "Suggested next step: run a fresh challenge.",
-    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would. The neck answered the screen light on 6 of 6 colour steps while the face did not, as a face drawn over a real person would. This compares the face with the neck as a hypothesis against live face swaps."
+    "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would. The neck answered the screen light on 5 of 5 colour steps while the face did not, as a face drawn over a real person would. This compares the face with the neck as a hypothesis against live face swaps."
    ],
    "step_up": "fresh_challenge"
   },
@@ -588,7 +588,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.887727109,
+    "risk": 0.724945634,
     "status": "usable"
    }
   ]
@@ -709,7 +709,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.691807916,
+    "risk": 0.469364564,
     "status": "usable"
    }
   ]
@@ -719,7 +719,7 @@
    "outcome": "HUMAN_REVIEW",
    "reasons": [
     "Two independent kinds of evidence raised risk, so a person must review it.",
-    "Sensor and stream: 100% of frame intervals were within 0.5 ms of 33.3 ms (spread 0.00%), a perfect clock; a hypothesis for virtual cameras. 405 of 416 frames repeated the one before (97.4%; limit 5%).",
+    "Sensor and stream: 100% of frame intervals were within 0.5 ms of 33.3 ms (spread 0.00%), a perfect clock; a hypothesis for virtual cameras. 435 of 446 frames repeated the one before (97.5%; limit 5%).",
     "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would."
    ],
    "step_up": null
@@ -921,7 +921,7 @@
     "check_id": "light.background",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.040217233,
+    "risk": 0.050515617,
     "status": "usable"
    },
    {
@@ -953,7 +953,7 @@
     "check_id": "pulse.coherence",
     "flag": false,
     "reason_codes": [],
-    "risk": 0.691807916,
+    "risk": 0.469364564,
     "status": "usable"
    }
   ]

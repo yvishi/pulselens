@@ -62,7 +62,7 @@ def test_ten_percent_exact_repeats_flag_duplicates(tmp_path: Path) -> None:
 
 
 def test_twenty_frames_abstain(synth) -> None:
-    ctx = synth.context(kind="genuine", turn=None, n_colour=0, fps=10)
+    ctx = synth.context(kind="genuine", turn=None, n_colour=0, fps=20 / 3)  # 3 s (baseline + tail) at 150 ms
     assert ctx.n == 20
     for r in run(ctx):
         assert r.status == "abstain" and r.risk is None and not r.flag
