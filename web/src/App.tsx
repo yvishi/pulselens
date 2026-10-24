@@ -58,7 +58,7 @@ export function Home() {
         <ol>
           <li>Start a verification and share the link or QR code with the customer.</li>
           <li>The customer's screen shows a few soft colours and asks them to turn their head. About 20 seconds.</li>
-          <li>PulseLens gives a recommendation: looks genuine, try again, or needs your review.</li>
+          <li>PulseLens gives a recommendation: no signs of a fake found, try again, or needs your review.</li>
           <li>You make the final decision: approve, ask for a new attempt, or escalate to the fraud team.</li>
         </ol>
       </section>
