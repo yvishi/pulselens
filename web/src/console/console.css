@@ -178,7 +178,7 @@
 .state-flag { color: #a32d2d; }
 .state-not_raised { color: #0f6e56; }
 .state-abstained { color: #854f0b; }
-.state-not_run { color: #5f5e5a; }
+.state-not_run, .state-pending { color: #5f5e5a; }
 
 .family .note {
   font-style: italic;
