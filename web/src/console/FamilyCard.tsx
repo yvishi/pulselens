@@ -75,20 +75,20 @@ function Group({ title, results }: { title: string; results: CheckResult[] }) {
 }
 
 /** One evidence family: its state, and its checks split into raised risk, could not judge, and checked. */
-export function FamilyCard({ summary, results }: { summary: FamilySummary; results: CheckResult[] }) {
+export function FamilyCard({ family, summary, results }: { family: Family; summary: FamilySummary | null; results: CheckResult[] }) {
   const raised = results.filter((r) => r.status === "protocol_error" || (r.status === "usable" && r.flag));
   const abstained = results.filter((r) => r.status === "abstain");
   const clean = results.filter((r) => r.status === "usable" && !r.flag);
   return (
-    <section className={`family family-${summary.state}`} aria-label={`Family ${summary.family}: ${FAMILY_NAME[summary.family]}`}>
+    <section className={`family family-${summary?.state ?? "pending"}`} aria-label={`Family ${family}: ${FAMILY_NAME[family]}`}>
       <header>
         <h3>
-          {summary.family} · {FAMILY_NAME[summary.family]}
+          {family} · {FAMILY_NAME[family]}
         </h3>
-        <span className={`chip state-${summary.state}`}>{STATE_CHIP[summary.state]}</span>
+        <span className={`chip state-${summary?.state ?? "pending"}`}>{summary ? STATE_CHIP[summary.state] : "Analysing…"}</span>
       </header>
-      {summary.family === "A" && <p className="note">Experimental, not used in the decision.</p>}
-      {!results.length && <p className="muted">No check of this family ran in this session.</p>}
+      {family === "A" && <p className="note">Experimental, not used in the decision.</p>}
+      {summary && !results.length && <p className="muted">No check of this family ran in this session.</p>}
       <Group title="Raised risk" results={raised} />
       <Group title="Could not judge" results={abstained} />
       <Group title="Checked, no risk" results={clean} />

@@ -8,6 +8,27 @@ export function customerLink(origin: string, customerUrl: string): string {
   return origin + customerUrl;
 }
 
+/** The customer link with copy button and a QR for a phone to scan. */
+export function CustomerLink({ url }: { url: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, url, { width: 256 }).catch(() => undefined);
+    }
+  }, [url]);
+
+  return (
+    <div className="next-link">
+      <a href={url}>{url}</a>
+      <button type="button" onClick={() => void navigator.clipboard.writeText(url)}>
+        Copy link
+      </button>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
 /** Agent starts a session: pick product, optionally no flash, then share the link or QR. */
 export function NewSession() {
   const [product, setProduct] = useState<Product>("savings_account");
@@ -15,13 +36,6 @@ export function NewSession() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (link && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, link, { width: 256 }).catch(() => undefined);
-    }
-  }, [link]);
 
   const create = async () => {
     setBusy(true);
@@ -52,15 +66,7 @@ export function NewSession() {
       <button type="button" disabled={busy} onClick={() => void create()}>
         New session
       </button>
-      {link && (
-        <div className="next-link">
-          <a href={link}>{link}</a>
-          <button type="button" onClick={() => void navigator.clipboard.writeText(link)}>
-            Copy link
-          </button>
-          <canvas ref={canvasRef} />
-        </div>
-      )}
+      {link && <CustomerLink url={link} />}
       {error && (
         <p role="alert" className="error">
           {error}

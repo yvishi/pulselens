@@ -17,6 +17,7 @@ from pulselens.contracts import Decision, FamilySummary, Plan
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
 from pulselens.engine.store import SessionStore
+from tests.engine.api import PREFLIGHT, SyncExecutor
 
 FORBIDDEN = ("risk", "flag", "check_id", "family", "outcome")
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
@@ -52,13 +53,15 @@ def client(tmp_path: Path, clock: Clock) -> TestClient:
         yield c
 
 
+@pytest.fixture
+def sync_client(tmp_path: Path, clock: Clock) -> TestClient:
+    settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
+    with TestClient(create_app(settings, runner=fake_runner, clock=clock, executor=SyncExecutor())) as c:
+        yield c
+
+
 def preflight(**over) -> dict:
-    return {
-        "user_agent": "test", "platform": "desktop", "browser": "Brave 155", "camera_label": "cam", "width": 640,
-        "height": 480, "measured_fps": 30.0, "dropped_frame_ratio": 0.0, "blur": 100.0, "brightness": 120.0,
-        "face_found": True, "face_fraction": 0.1, "controls": [], "gyro": False, "no_flash_requested": False,
-        "clock": "captureTime", "probe": [], **over,
-    }
+    return {**PREFLIGHT, **over}
 
 
 def create(client: TestClient, **body) -> dict:
@@ -242,7 +245,7 @@ def test_exact_resend_is_an_idempotent_no_op(client: TestClient, tmp_path: Path,
     protocol = protocol_of(tmp_path, s)
     assert protocol.status != "protocol_error" and "integrity.duplicate_index" not in protocol.reason_codes
     plan = Plan.model_validate(json.loads((tmp_path / "data" / s["session_id"] / "plan.json").read_text()))
-    decision = fuse([protocol], plan, 1)
+    decision = fuse([protocol], plan, 1, decided_at_ms=0)
     assert not decision.integrity_violation and "fusion.integrity_violation" not in decision.reasons
 
 
@@ -291,19 +294,16 @@ def test_exact_resend_after_complete_is_not_an_after_complete_attempt(client: Te
     assert [r["idx"] for r in rows(tmp_path, s)] == [0, 1]
 
 
-def test_customer_payloads_have_no_scores(client: TestClient) -> None:
+def test_customer_payloads_have_no_scores(sync_client: TestClient) -> None:
+    client = sync_client
     s = create(client)
     sid = s["session_id"]
     responses = [client.post(f"/api/sessions/{sid}/preflight", headers=auth(s), json=preflight())]
     responses.append(client.get(f"/api/sessions/{sid}/challenge", headers=auth(s)))
     responses.append(post_frames(client, s, [0, 1, 2]))
     responses.append(client.post(f"/api/sessions/{sid}/complete", headers=auth(s)))
-    for _ in range(50):
-        status = client.get(f"/api/sessions/{sid}/status", headers=auth(s))
-        responses.append(status)
-        if status.json()["state"] == "done":
-            break
-        time.sleep(0.02)
+    status = client.get(f"/api/sessions/{sid}/status", headers=auth(s))
+    responses.append(status)
     assert status.json() == {"state": "done", "message": "continue"}
     assert set(status.json()) == {"state", "message"}
     for r in responses:

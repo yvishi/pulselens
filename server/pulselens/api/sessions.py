@@ -47,10 +47,11 @@ def _customer(request: Request, session_id: str, authorization: str | None) -> d
     return session
 
 
-def _refuse_after_complete(request: Request, session: dict[str, Any]) -> None:
-    """Refuses frames and events after /complete, and counts the attempt (K5: integrity.after_complete)."""
+def _refuse_after_complete(request: Request, session: dict[str, Any], *, resend: bool = False) -> None:
+    """Refuses after /complete and counts it (K5), but not an exact re-send (lost-response retry, rule 3)."""
     if session["state"] in FINISHED:
-        _store(request).increment(session["session_id"], "after_complete_attempts")
+        if not resend:
+            _store(request).increment(session["session_id"], "after_complete_attempts")
         raise HTTPException(409, "session_complete")
 
 
@@ -115,17 +116,14 @@ async def frames(request: Request, session_id: str, authorization: Auth = None) 
     session = _customer(request, session_id, authorization)
     limits = request.app.state.config["session"]
     store = _store(request)
+    resend = False
     if session["state"] in FINISHED:
-        # Still 409, but an exact re-send of a stored batch (a retry whose response was lost) is a network
-        # artefact, not a late frame, so it does not count toward integrity.after_complete (AGENTS.md rule 3).
         try:
             meta, jpegs = await _read_batch(request, limits)
+            resend = store.is_resend(session_id, meta, jpegs)
         except HTTPException:
-            meta, jpegs = None, []
-        with store.lock(session_id):
-            if meta is None or not store.is_resend(session_id, meta, jpegs):
-                store.increment(session_id, "after_complete_attempts")
-        raise HTTPException(409, "session_complete")
+            pass
+    _refuse_after_complete(request, session, resend=resend)
     meta, jpegs = await _read_batch(request, limits)
     try:
         store.append_frames(session_id, meta, jpegs, max_frames=limits["max_frames"])

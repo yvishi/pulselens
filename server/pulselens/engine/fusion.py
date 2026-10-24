@@ -10,7 +10,6 @@ PulseLens recommends; the agent decides.
 
 from __future__ import annotations
 
-import time
 from collections import defaultdict
 
 from pulselens.contracts import (
@@ -105,7 +104,7 @@ def _reasons(code: str, step_up: StepUp | None, results: list[CheckResult], summ
     return reasons
 
 
-def fuse(results: list[CheckResult], plan: Plan | None, attempt: int) -> Decision:
+def fuse(results: list[CheckResult], plan: Plan | None, attempt: int, *, decided_at_ms: int) -> Decision:
     by_family: dict[Family, list[CheckResult]] = {f: [] for f in FAMILIES}
     for r in results:
         by_family[r.family].append(r)
@@ -119,7 +118,7 @@ def fuse(results: list[CheckResult], plan: Plan | None, attempt: int) -> Decisio
         reasons=_reasons(code, step_up, results, summaries, by_family),
         integrity_violation=code == "fusion.integrity_violation",
         provisional=any(r.status == "usable" and r.threshold_source == "provisional" for r in results),
-        decided_at_ms=int(time.time() * 1000),
+        decided_at_ms=decided_at_ms,
     )
 
 

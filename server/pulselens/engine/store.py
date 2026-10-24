@@ -14,8 +14,10 @@ from pydantic import BaseModel
 
 from pulselens.bundle import _read_jsonl, frame_name
 from pulselens.contracts import (
+    AgentDecision,
     Challenge,
     ChallengeEvent,
+    CheckResult,
     Decision,
     FrameBatchMeta,
     FrameMeta,
@@ -140,7 +142,7 @@ class SessionStore:
     def save_model(self, session_id: str, name: str, model: BaseModel) -> None:
         """e.g. name "plan" → plan.json."""
         with self.lock(session_id):
-            (self.path(session_id) / f"{name}.json").write_text(model.model_dump_json(), encoding="utf-8")
+            self._write_text(self.path(session_id) / f"{name}.json", model.model_dump_json())
 
     def save_once(self, session_id: str, name: str, model: BaseModel) -> bool:
         """Writes name.json only if it does not exist yet (single use under concurrency). False if it existed."""
@@ -158,6 +160,23 @@ class SessionStore:
             audit.append(self.path(session_id), "challenge.issued", challenge.model_dump(mode="json"))
             self.set_state(session_id, "capturing")
             return True
+
+    def save_analysis(self, session_id: str, results: list[CheckResult], decision: Decision) -> None:
+        """results.json and decision.json (atomic writes), their audit entries, then state "done", under the lock."""
+        folder = self.path(session_id)
+        with self.lock(session_id):
+            results_json = json.dumps([r.model_dump(mode="json") for r in results])
+            self._write_text(folder / "results.json", results_json)
+            self._write_text(folder / "decision.json", decision.model_dump_json())
+            audit.append(folder, "analysis.done", results_json.encode())
+            audit.append(folder, "decision.made", decision.model_dump(mode="json"))
+            self.set_state(session_id, "done")
+
+    def record_agent(self, session_id: str, decision: AgentDecision) -> None:
+        """agent.json (atomic) and its audit entry, under the lock."""
+        with self.lock(session_id):
+            self.save_model(session_id, "agent", decision)
+            audit.append(self.path(session_id), "agent.action", decision.model_dump(mode="json"))
 
     def has(self, session_id: str, name: str) -> bool:
         return (self.path(session_id) / f"{name}.json").exists()
@@ -255,7 +274,11 @@ class SessionStore:
         return sorted(out, key=lambda x: x.created_at_ms, reverse=True)
 
     @staticmethod
-    def _write_json(path: Path, payload: Any) -> None:
+    def _write_text(path: Path, text: str) -> None:
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8")
         tmp.replace(path)
+
+    @staticmethod
+    def _write_json(path: Path, payload: Any) -> None:
+        SessionStore._write_text(path, json.dumps(payload))

@@ -74,10 +74,7 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
         <div className="family-grid">
           {FAMILIES.map((f) => {
             const results = report.results.filter((r) => r.family === f);
-            const summary = summaries.get(f) ?? {
-              family: f, state: results.length ? "abstained" : "not_run", usable_checks: 0, flagged_checks: 0, reasons: [],
-            };
-            return <FamilyCard key={f} summary={summary} results={results} />;
+            return <FamilyCard key={f} family={f} summary={summaries.get(f) ?? null} results={results} />;
           })}
         </div>
       </section>

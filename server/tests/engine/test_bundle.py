@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from pulselens.bundle import load_bundle, write_bundle
-from pulselens.contracts import ChallengeEvent, FrameMeta
+from pulselens.contracts import AgentDecision, ChallengeEvent, CheckResult, Decision, FamilySummary, FrameMeta
 
 
 def _jpeg(w: int = 8, h: int = 6) -> bytes:
@@ -69,3 +69,27 @@ def test_empty_jpeg_reads_as_none(tmp_path: Path) -> None:
     b = load_bundle(tmp_path)
     assert b.read_frame(0) is None
     assert b.read_frame(1) is not None
+
+
+def test_load_bundle_reads_analysis_output(tmp_path: Path) -> None:
+    result = CheckResult(check_id="light.response", family="C", vote_group="C.light", status="usable", risk=0.1,
+                         flag=False, quality=1.0, explanation="ok.", threshold_source="provisional")
+    families = [FamilySummary(family=f, state="not_raised", usable_checks=1, flagged_checks=0, reasons=[])
+                for f in "ABCD"]
+    decision = Decision(outcome="PASS", step_up=None, families=families, reasons=["r"], integrity_violation=False,
+                        provisional=True, decided_at_ms=1)
+    agent = AgentDecision(action="escalate", note="x")
+    (tmp_path / "results.json").write_text(f"[{result.model_dump_json()}]", encoding="utf-8")
+    (tmp_path / "decision.json").write_text(decision.model_dump_json(), encoding="utf-8")
+    (tmp_path / "agent.json").write_text(agent.model_dump_json(), encoding="utf-8")
+    b = load_bundle(tmp_path)
+    assert b.results == [result]
+    assert b.decision == decision
+    assert b.agent_decision == agent
+
+
+def test_load_bundle_corrupt_analysis_output_is_empty(tmp_path: Path) -> None:
+    (tmp_path / "results.json").write_text("not json", encoding="utf-8")
+    (tmp_path / "decision.json").write_text("{}", encoding="utf-8")
+    b = load_bundle(tmp_path)
+    assert b.results == [] and b.decision is None and b.agent_decision is None

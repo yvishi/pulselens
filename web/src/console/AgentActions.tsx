@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createSession, postAgentDecision } from "../api/client";
+import { CustomerLink, customerLink } from "./NewSession";
 import type { AgentAction, AgentDecision, Product } from "../contracts";
 
 const LABEL: Record<AgentAction, string> = { approve: "Approve", reverify: "Re-verify", escalate: "Escalate to fraud" };
@@ -30,7 +31,7 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
       setAt(new Date().toLocaleTimeString());
       if (action === "reverify") {
         const next = await createSession({ product, previous_session_id: sessionId });
-        setLink(`${window.location.origin}${next.customer_url}`);
+        setLink(customerLink(window.location.origin, next.customer_url));
       }
       onRecorded();
     } catch (e) {
@@ -63,9 +64,10 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
       </div>
       {!hasDecision && <p className="muted">Actions open when the analysis has finished.</p>}
       {link && (
-        <p className="next-link">
-          New attempt for the customer: <a href={link}>{link}</a>
-        </p>
+        <div>
+          New attempt for the customer:
+          <CustomerLink url={link} />
+        </div>
       )}
       {error && (
         <p role="alert" className="error">

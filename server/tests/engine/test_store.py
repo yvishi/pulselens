@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 from pulselens.config import load_config
-from pulselens.contracts import Plan, SessionCreate
+from pulselens.contracts import AgentDecision, Decision, Plan, SessionCreate
 from pulselens.engine import audit
+from pulselens.engine.fusion import fuse
 from pulselens.engine.planner import make_challenge, rng_for_nonce
+from pulselens.engine.results import usable
 from pulselens.engine.store import SessionStore
 
 
@@ -29,3 +32,43 @@ def test_issue_challenge_is_single_use_and_audited(tmp_path: Path) -> None:
     assert types == ["session.created", "challenge.issued"]
     assert audit.verify(folder) == (True, None)
 
+
+def test_save_analysis_writes_both_files_audits_and_finishes(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "data")
+    sid = store.create(SessionCreate()).session_id
+    results = [usable("B.one", "first check"), usable("B.two", "second check", risk=0.2)]
+    decision = fuse(results, None, 1, decided_at_ms=0)
+
+    store.save_analysis(sid, results, decision)
+
+    folder = store.path(sid)
+    results_bytes = (folder / "results.json").read_bytes()
+    assert json.loads(results_bytes) == [r.model_dump(mode="json") for r in results]
+    assert Decision.model_validate_json((folder / "decision.json").read_text(encoding="utf-8")) == decision
+    rows = [json.loads(line) for line in (folder / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["type"] for r in rows][-2:] == ["analysis.done", "decision.made"]
+    assert rows[-2]["payload_sha256"] == hashlib.sha256(results_bytes).hexdigest()
+    assert store.get(sid)["state"] == "done"
+    assert list(folder.glob("*.tmp")) == []
+    assert audit.verify(folder) == (True, None)
+
+
+def test_record_agent_saves_and_audits(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "data")
+    sid = store.create(SessionCreate()).session_id
+
+    store.record_agent(sid, AgentDecision(action="escalate", note="check ID"))
+
+    folder = store.path(sid)
+    assert json.loads((folder / "agent.json").read_text(encoding="utf-8")) == {"action": "escalate", "note": "check ID"}
+    rows = [json.loads(line) for line in (folder / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[-1]["type"] == "agent.action"
+    assert audit.verify(folder) == (True, None)
+    assert list(folder.glob("*.tmp")) == []
+
+
+def test_only_the_store_writes_audit_lines():
+    root = Path(__file__).resolve().parents[2] / "pulselens"
+    users = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
+                   if "engine import audit" in p.read_text(encoding="utf-8") and p.name != "audit.py")
+    assert users == ["engine/store.py"]

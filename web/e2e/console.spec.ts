@@ -1,12 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { API, DATA, WEB, createSession } from "./support/bundle";
 
 // K7: the agent console against the real server with PULSE_FAKE_ANALYSIS=1 (see playwright.config.ts).
-const API = "http://127.0.0.1:8000";
-const WEB = "http://localhost:5173";
 const PASSCODE = "e2e-passcode";
-const DATA = path.resolve(import.meta.dirname, "../../data/e2e");
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const PREFLIGHT = {
   user_agent: "e2e", platform: "desktop", browser: "Brave", camera_label: "fake", width: 640, height: 480,
@@ -16,7 +14,7 @@ const PREFLIGHT = {
 
 /** A minimal finished session through the customer API: preflight, challenge, 60 frames, events, complete. */
 async function completedSession(request: APIRequestContext): Promise<string> {
-  const created = await (await request.post(`${API}/api/sessions`, { data: {} })).json();
+  const created = await createSession(request);
   const id: string = created.session_id;
   const auth = { Authorization: `Bearer ${created.customer_token}` };
   expect((await request.post(`${API}/api/sessions/${id}/preflight`, { headers: auth, data: PREFLIGHT })).ok()).toBe(true);
