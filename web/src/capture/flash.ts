@@ -3,6 +3,7 @@
  * The server's schedule already respects this; the client enforces it as a second line of defence by delaying.
  */
 import { now } from "./clock";
+import { sleep } from "./util";
 
 export const MIN_CHANGE_GAP_MS = 334;
 
@@ -30,4 +31,4 @@ export class FlashLimiter {
   }
 }
 
-export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+export { sleep };

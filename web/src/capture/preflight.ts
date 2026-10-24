@@ -6,9 +6,10 @@ import { now } from "./clock";
 import { detectGyro, parseUserAgent, platformOf } from "./env";
 import { createFaceTracker, type FaceTracker } from "./face";
 import { runProbe } from "./probe";
-import { median, videoQualitySampler } from "./quality";
+import { videoQualitySampler } from "./quality";
+import { frameTime, median, sleep as realSleep, type FrameClock } from "./util";
 
-export type FrameClock = Preflight["clock"];
+export type { FrameClock } from "./util";
 
 /** The slice of Y1's FrameGrabber the preflight needs. */
 export interface FrameStatsSource {
@@ -41,8 +42,9 @@ export function videoFrameStats(video: HTMLVideoElement): FrameStatsSource {
   let lastMediaTime = -1;
   const onFrame = (t: number, m: VideoFrameCallbackMetadata) => {
     if (!running) return;
-    clock = m.captureTime !== undefined ? "captureTime" : m.expectedDisplayTime !== undefined ? "expectedDisplayTime" : "now";
-    times.push(m.captureTime ?? m.expectedDisplayTime ?? t);
+    const ft = frameTime(m, t);
+    clock = ft.clock;
+    times.push(ft.t);
     firstPresented ??= m.presentedFrames;
     lastPresented = m.presentedFrames;
     video.requestVideoFrameCallback(onFrame);
@@ -82,7 +84,7 @@ export async function runPreflight(
 ): Promise<Preflight> {
   const grabber = deps.grabber ?? videoFrameStats(video);
   const sample = deps.sample ?? videoQualitySampler(video);
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep = deps.sleep ?? realSleep;
   const tracker = (deps.faceTracker ?? createFaceTracker)().catch(() => null); // loads while we measure
   const gyro = (deps.gyro ?? detectGyro)().catch(() => false);
 

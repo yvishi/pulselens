@@ -4,6 +4,7 @@
  * Yaw sign (CONTRACT §1): positive when the person turns to their own left.
  */
 import type { TurnDirection } from "./turnPrompt";
+import { median } from "./util";
 
 /** The ring is full at this many degrees from rest in the requested direction. */
 export const TURN_FULL_DEG = 20;
@@ -24,12 +25,6 @@ export function turnProgress(yawDeg: number, yaw0: number, direction: TurnDirect
 export function arrowSide(direction: TurnDirection, mirrored: boolean): TurnDirection {
   if (mirrored) return direction;
   return direction === "left" ? "right" : "left";
-}
-
-export function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
 /** Feeds yaw samples (null when no face) and reports the ring's progress; rest = median of the first 300 ms. */

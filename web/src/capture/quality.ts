@@ -3,7 +3,12 @@
 /** Analysis size for quality samples (CONTRACT §3 `Preflight.blur`). */
 export const QUALITY_SIZE: [number, number] = [160, 120];
 
-const luma = (d: Uint8ClampedArray, k: number) => 0.299 * d[k]! + 0.587 * d[k + 1]! + 0.114 * d[k + 2]!;
+/** Rec.709 luma weights, the same as the server's (server/pulselens/analysis/quality.py `LUMA`). */
+export const LUMA_WEIGHTS = [0.2126, 0.7152, 0.0722] as const;
+const [WR, WG, WB] = LUMA_WEIGHTS;
+
+/** Luma (0..255) of the RGBA pixel at byte offset k: Rec.709 weights on the sRGB values. */
+export const luma = (d: Uint8ClampedArray, k: number): number => WR * d[k]! + WG * d[k + 1]! + WB * d[k + 2]!;
 
 /** Mean luma (0..255) of RGBA pixels. */
 export function meanLuma(d: Uint8ClampedArray, w: number, h: number): number {
@@ -31,12 +36,7 @@ export function laplacianVariance(d: Uint8ClampedArray, w: number, h: number): n
   return Math.max(0, sum2 / n - mean * mean);
 }
 
-export function median(xs: number[]): number {
-  if (!xs.length) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-}
+export { median } from "./util";
 
 /** A sampler that draws the current video frame at QUALITY_SIZE and measures it; returns null without a 2D canvas. */
 export function videoQualitySampler(video: HTMLVideoElement): () => { blur: number; brightness: number } | null {
