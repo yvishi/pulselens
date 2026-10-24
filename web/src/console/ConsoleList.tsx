@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { listSessions } from "../api/client";
 import "./console.css";
 import { OUTCOME_TITLE } from "./OutcomeBanner";
+import { NewSession } from "./NewSession";
 import { PasscodeGate } from "./PasscodeGate";
 import { POLL_ERROR_TEXT, usePoll } from "./usePoll";
 
@@ -14,6 +15,7 @@ function SessionTable({ passcode, onUnauthorized }: { passcode: string; onUnauth
   return (
     <main className="console">
       <h1>Agent console</h1>
+      <NewSession />
       {error && (
         <p role="alert" className="error">
           {error}
