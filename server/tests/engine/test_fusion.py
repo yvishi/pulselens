@@ -30,6 +30,14 @@ def light(status: str = "usable", flag: bool = False, codes: list[str] | None = 
     return r("C", status, flag, group="response", codes=codes, check_id="light.response")
 
 
+def nod(status: str = "usable", codes: list[str] | None = None) -> CheckResult:
+    return r("D", status, False, group="nod", codes=codes, check_id="turn.nod")
+
+
+def digits(status: str = "usable", codes: list[str] | None = None) -> CheckResult:
+    return r("D", status, False, group="lips", codes=codes, check_id="visual.lip_digits")
+
+
 def plan(mode: str = "CAPABLE", run_turn: bool = True) -> Plan:
     return Plan(mode=mode, run_light=mode != "NO_FLASH", run_turn=run_turn, agent_questions=mode == "NO_FLASH",
                 reasons=[])
@@ -82,6 +90,21 @@ CASES = [
     ("without_a_turn_and_no_light_answer_is_not_a_pass",
      [r("B"), light("abstain", codes=["light.weak_face_echo"]), r("C", group="relative"), r("D", group="identity")],
      "CAPABLE_NO_TURN", 1, "RETRY_STEP_UP", "agent_checks"),
+    # Row 4 for every live prompt (challenge.extra_prompts): a nod or digits shown, not followed -> fresh challenge.
+    ("nod_and_digits_followed_pass", CLEAN + [nod(), digits()], "CAPABLE", 1, "PASS", None),
+    ("nod_not_performed_is_a_fresh_challenge", CLEAN + [nod("abstain", codes=["turn.nod_not_performed"]), digits()],
+     "CAPABLE", 1, "RETRY_STEP_UP", "fresh_challenge"),
+    ("digits_not_read_is_a_fresh_challenge",
+     CLEAN + [nod(), digits("abstain", codes=["visual.digits_not_performed", "visual.lips_out_of_sync"])], "NO_FLASH",
+     1, "RETRY_STEP_UP", "fresh_challenge"),
+    ("digits_not_read_again_goes_to_the_agent",
+     CLEAN + [digits("abstain", codes=["visual.digits_not_performed"])], "CAPABLE", 2, "RETRY_STEP_UP",
+     "agent_checks"),
+    ("nod_unjudged_for_poor_light_is_no_retry", CLEAN + [nod("abstain", codes=["quality.too_dark"])], "CAPABLE", 1,
+     "PASS", None),
+    ("nod_and_digits_do_not_replace_the_turn",
+     [r("B"), r("C"), nod(), digits(), turn("abstain", codes=["quality.too_dark"])], "CAPABLE", 1, "RETRY_STEP_UP",
+     "agent_checks"),
 ]
 
 

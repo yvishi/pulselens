@@ -8,8 +8,8 @@
 5. Outcome: first matching rule wins.
 6. Liveness must be shown, not just not disproved (S2: a YouTube face replayed to the camera passed with no flag,
    because every check that could catch it abstained). PASS also needs the live challenge verified: the head turn
-   followed when the plan ran one, else the light answered. A turn prompt that was shown but not performed is a
-   fresh challenge, never a pass.
+   followed when the plan ran one, else the light answered. A live prompt (turn, nod, digits read aloud) that was
+   shown but not performed is a fresh challenge, never a pass.
 PulseLens recommends; the agent decides.
 """
 
@@ -74,16 +74,22 @@ def _low_coverage_step_up(
 
 
 TURN, LIGHT = "turn.follow", "light.response"  # the live challenges: a recording cannot answer them on time
+# Every live prompt and the reason code its check abstains with when the prompt was not followed. The nod and the
+# digits (challenge.extra_prompts) are not required for PASS until real sessions have measured them.
+NOT_PERFORMED = {
+    TURN: "turn.not_performed",
+    "turn.nod": "turn.nod_not_performed",
+    "visual.lip_digits": "visual.digits_not_performed",
+}
 
 
 def _verified(results: list[CheckResult], check_id: str) -> bool:
     return any(r.check_id == check_id and r.status == "usable" and not r.flag for r in results)
 
 
-def _turn_skipped(results: list[CheckResult]) -> bool:
-    """The turn prompt was shown, the face was seen, and the head did not turn as asked."""
-    return any(r.check_id == TURN and r.status == "abstain" and "turn.not_performed" in r.reason_codes
-               for r in results)
+def _prompt_skipped(results: list[CheckResult]) -> bool:
+    """A live prompt (head turn, nod, digits read aloud) was shown and not followed."""
+    return any(r.status == "abstain" and NOT_PERFORMED.get(r.check_id) in r.reason_codes for r in results)
 
 
 def _outcome(
@@ -100,7 +106,7 @@ def _outcome(
     if len(flagged) == 1:
         no_flash = plan is not None and plan.mode == "NO_FLASH"
         return "RETRY_STEP_UP", "fusion.one_family", "agent_checks" if no_flash or attempt >= 2 else "fresh_challenge"
-    if _turn_skipped(results):
+    if _prompt_skipped(results):
         return "RETRY_STEP_UP", "fusion.challenge_not_done", "agent_checks" if attempt >= 2 else "fresh_challenge"
     if len(covered) < 2:
         return "RETRY_STEP_UP", "fusion.low_coverage", _low_coverage_step_up(by_family["C"], state["C"], plan, attempt)

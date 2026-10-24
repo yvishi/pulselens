@@ -32,7 +32,8 @@ REASON_TEXT: dict[str, str] = {
     "fusion.two_families": "Two independent kinds of evidence raised risk, so a person must review it.",
     "fusion.one_family": "One kind of evidence raised risk; a further check is needed before deciding.",
     "fusion.low_coverage": "Too little usable evidence was captured to decide; a further check is needed.",
-    "fusion.challenge_not_done": "The head turn was asked for but not performed, so the live challenge is repeated.",
+    "fusion.challenge_not_done": "A live prompt (head turn, nod or digits read aloud) was shown but not performed, "
+                                 "so the live challenge is repeated.",
     "fusion.liveness_not_shown": "The live challenge could not be verified, so a further check is needed.",
     "fusion.pass": "The live challenge was verified, enough usable evidence was captured and none of it raised risk.",
     "fusion.step_up.fresh_challenge": "Suggested next step: run a fresh challenge.",
