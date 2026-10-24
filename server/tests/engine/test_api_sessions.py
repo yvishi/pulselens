@@ -17,7 +17,7 @@ from pulselens.contracts import Decision, FamilySummary, Plan
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
 from pulselens.engine.store import SessionStore
-from tests.engine.api import SyncExecutor
+from tests.engine.api import PREFLIGHT, SyncExecutor
 
 FORBIDDEN = ("risk", "flag", "check_id", "family", "outcome")
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64 + b"\xff\xd9"
@@ -61,12 +61,7 @@ def sync_client(tmp_path: Path, clock: Clock) -> TestClient:
 
 
 def preflight(**over) -> dict:
-    return {
-        "user_agent": "test", "platform": "desktop", "browser": "Brave 155", "camera_label": "cam", "width": 640,
-        "height": 480, "measured_fps": 30.0, "dropped_frame_ratio": 0.0, "blur": 100.0, "brightness": 120.0,
-        "face_found": True, "face_fraction": 0.1, "controls": [], "gyro": False, "no_flash_requested": False,
-        "clock": "captureTime", "probe": [], **over,
-    }
+    return {**PREFLIGHT, **over}
 
 
 def create(client: TestClient, **body) -> dict:

@@ -17,7 +17,7 @@ from pulselens.contracts import ChallengeEvent, ColourStep, FrameMeta, Plan, Ses
 from pulselens.engine import fake_analysis
 from pulselens.engine.runner import choose_analyze, run_analysis
 from pulselens.engine.store import SessionStore
-from tests.engine.api import SyncExecutor
+from tests.engine.api import SyncExecutor, drive
 
 JPEG = b"\xff\xd8\xff\xd9"
 
@@ -119,21 +119,9 @@ def test_choose_analyze(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_complete_runs_the_runner_end_to_end(tmp_path: Path) -> None:
     settings = Settings(agent_passcode="pc", data_dir=tmp_path / "data", fake_analysis=True)
     with TestClient(create_app(settings, executor=SyncExecutor())) as client:
-        s = client.post("/api/sessions", json={}).json()
-        h = {"Authorization": f"Bearer {s['customer_token']}"}
+        s = drive(client)
         sid = s["session_id"]
-        pre = {"user_agent": "t", "platform": "desktop", "browser": "b", "camera_label": "c", "width": 640,
-               "height": 480, "measured_fps": 30.0, "dropped_frame_ratio": 0.0, "blur": 1.0, "brightness": 120.0,
-               "face_found": True, "face_fraction": 0.1, "controls": [], "gyro": False, "no_flash_requested": False,
-               "clock": "now", "probe": []}
-        client.post(f"/api/sessions/{sid}/preflight", headers=h, json=pre)
-        client.get(f"/api/sessions/{sid}/challenge", headers=h)
-        for seq in range(3):
-            idxs = range(seq * 20, seq * 20 + 20)
-            meta = {"batch_seq": seq, "frames": [{"idx": i, "t_ms": 33.3 * i, "w": 640, "h": 480} for i in idxs]}
-            client.post(f"/api/sessions/{sid}/frames", headers=h, data={"meta": json.dumps(meta)},
-                        files={f"f{i}": (f"{i}.jpg", JPEG, "image/jpeg") for i in idxs})
-        assert client.post(f"/api/sessions/{sid}/complete", headers=h).status_code == 202
+        h = {"Authorization": f"Bearer {s['customer_token']}"}
         status = client.get(f"/api/sessions/{sid}/status", headers=h).json()
     assert status == {"state": "done", "message": "continue"}
     decision = json.loads((tmp_path / "data" / sid / "decision.json").read_text())
