@@ -1,12 +1,11 @@
 import { chromium, expect, test, type Page } from "@playwright/test";
-import { WEB, createSession, readBundle } from "./support/bundle";
+import { FORBIDDEN_WORDS, WEB, createSession, readBundle } from "./support/bundle";
 import { REPLAY_API, REPLAY_Y4M, bundleToY4m, startRealServer, stopServer, waitForReport } from "./support/replay";
 
 // Y4: the customer flow in Brave's fake camera, against the real server with PULSE_FAKE_ANALYSIS=1 and
 // PULSE_DATA_DIR=data/e2e (both set by playwright.config.ts).
 const CONTINUE = "Thank you, you can continue the call.";
 const NO_FLASH = "I'd rather not see flashing colours";
-const LEAKS = ["risk", "family", "outcome", "check_id"];
 
 // The fake camera has no face, so "Move closer" fires: 3 coaching rounds of 3 s plus a second preflight come
 // before the challenge (a real user with no face found should get that tip too). Hence the generous waits.
@@ -70,10 +69,10 @@ test("no score leaks", async ({ page }) => {
   await Promise.all(pending);
   expect(bodies.some((b) => b.url.includes("/status"))).toBe(true);
   for (const { url, body } of bodies) {
-    for (const word of LEAKS) expect(body, `${word} in ${url}`).not.toContain(word);
+    for (const word of FORBIDDEN_WORDS) expect(body, `${word} in ${url}`).not.toContain(word);
   }
   const text = await page.locator("main").innerText();
-  for (const word of ["score", "PASS", "risk", "family", "outcome"]) expect(text).not.toContain(word);
+  for (const word of FORBIDDEN_WORDS) expect(text, word).not.toContain(word);
 });
 
 test("360px no sideways scroll on every customer phase", async ({ page }) => {

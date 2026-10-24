@@ -1,23 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
-import type { Challenge, ChallengeEvent, CustomerStatus, Plan, Preflight } from "../contracts";
+import type { ChallengeEvent, CustomerStatus, Preflight } from "../contracts";
+import { CHALLENGE, EVENTS, PLAN, PREFLIGHT, runToEnd } from "../test/fixtures";
 import type { CoachMetrics } from "./coaching";
 import type { GrabberOptions } from "./grabber";
 import type { UploaderOptions, UploaderStats } from "./uploader";
 import { cameraError, CaptureSession, type CaptureSessionDeps, type CaptureState } from "./session";
-
-const PLAN: Plan = { mode: "CAPABLE", run_light: true, run_turn: true, agent_questions: false, reasons: ["mode.capable.ok"] };
-const CHALLENGE: Challenge = {
-  session_id: "s1", nonce: "n", mode: "CAPABLE", baseline_ms: 1500, total_ms: 6000,
-  steps: [
-    { kind: "colour", step_id: "c0", hue_deg: 40, start_offset_ms: 0, dwell_ms: 400 },
-    { kind: "turn", step_id: "t0", direction: "left", start_offset_ms: 1000, duration_ms: 3000 },
-  ],
-};
-const EVENTS: ChallengeEvent[] = [
-  { step_id: "c0", status: "shown", painted_t_ms: 1510, ended_t_ms: 1920, shown_rgb: [0.5, 0.5, 0.4], skip_reason: null },
-  { step_id: "t0", status: "shown", painted_t_ms: 2510, ended_t_ms: 5520, shown_rgb: null, skip_reason: null },
-];
 
 const GOOD: CoachMetrics = {
   brightness: 120, faceLuma: 120, outsideLuma: 110, faceFraction: 0.1, faceBottom: 0.5, blur: 100, blurBaseline: 100,
@@ -67,7 +55,7 @@ function stubs(over: Partial<CaptureSessionDeps> = {}) {
     stopCamera: vi.fn(() => void log.push("stopCamera")),
     runPreflight: vi.fn(async (_v, _c, opts: { noFlashRequested: boolean }) => {
       log.push("runPreflight");
-      return { no_flash_requested: opts.noFlashRequested } as Preflight;
+      return { ...PREFLIGHT, no_flash_requested: opts.noFlashRequested };
     }),
     chooseOverlayMode: vi.fn(async () => (log.push("chooseOverlayMode"), "fullscreen" as const)),
     createOverlay: vi.fn(() => (log.push("createOverlay"), overlay)),
@@ -169,11 +157,7 @@ describe("CaptureSession", () => {
   it("passes the no-flash choice into the preflight and uses the mobile size on phones", async () => {
     const st = stubs({ isMobile: () => true });
     const { s } = session(st.deps);
-    const done = s.start(true);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(true));
     expect(st.log).toContain("postPreflight(no_flash=true)");
     expect(st.grabberOpts()!.size).toEqual([480, 360]);
   });
@@ -222,22 +206,14 @@ describe("CaptureSession", () => {
       }),
     });
     const { s } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(reason).toBe("page_hidden");
   });
 
   it("no tips: no coaching screen and a single preflight", async () => {
     const st = stubs();
     const { s, phases } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(phases()).not.toContain("coaching");
     expect(st.deps.runPreflight).toHaveBeenCalledTimes(1);
   });
@@ -246,11 +222,7 @@ describe("CaptureSession", () => {
     const measure = vi.fn(async () => DARK);
     const st = stubs({ createCoachMeter: vi.fn(() => ({ measure })) });
     const { s, states, phases } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(phases().slice(0, 7)).toEqual(["camera", "preflight", "coaching", "coaching", "coaching", "preflight", "challenge"]);
     expect(states.filter((x) => x.phase === "coaching").map((x) => x.tips)).toEqual([["light"], ["light"], ["light"]]);
     expect(measure).toHaveBeenCalledTimes(4); // with the preflight, then once per round
@@ -263,11 +235,7 @@ describe("CaptureSession", () => {
     const results = [DARK, GOOD];
     const st = stubs({ createCoachMeter: vi.fn(() => ({ measure: vi.fn(async () => results.shift() ?? GOOD) })) });
     const { s, phases } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(phases().slice(0, 5)).toEqual(["camera", "preflight", "coaching", "preflight", "challenge"]);
   });
 
@@ -298,11 +266,7 @@ describe("CaptureSession", () => {
       }),
     });
     const { s } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(reasons).toEqual([null, "fps_drop", "fps_drop"]);
   });
 
@@ -356,13 +320,9 @@ describe("CaptureSession", () => {
 
   it("?lock=1: locks the camera around the challenge and restores it afterwards", async () => {
     const st = stubs({ shouldLock: vi.fn(() => true) });
-    st.deps.runPreflight = vi.fn(async () => ({ no_flash_requested: false, measured_fps: 10.4 }) as Preflight);
+    st.deps.runPreflight = vi.fn(async () => ({ ...PREFLIGHT, no_flash_requested: false, measured_fps: 10.4 }));
     const { s } = session(st.deps);
-    const done = s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    st.releaseFlush();
-    await vi.runAllTimersAsync();
-    await done;
+    await runToEnd(st, s.start(false));
     expect(st.deps.lockForLight).toHaveBeenCalledWith(expect.anything(), 10.4);
     const i = st.log.indexOf("runChallenge(t0=1234)");
     expect(st.log.indexOf("lock")).toBeLessThan(i);
@@ -373,11 +333,7 @@ describe("CaptureSession", () => {
   it("no lock without the flag, or on a no-flash plan", async () => {
     const plain = stubs();
     const a = session(plain.deps);
-    const d1 = a.s.start(false);
-    await vi.advanceTimersByTimeAsync(0);
-    plain.releaseFlush();
-    await vi.runAllTimersAsync();
-    await d1;
+    await runToEnd(plain, a.s.start(false));
     expect(plain.deps.lockForLight).not.toHaveBeenCalled();
 
     const nf = stubs({ shouldLock: vi.fn(() => true) });
@@ -385,11 +341,7 @@ describe("CaptureSession", () => {
       mode: "NO_FLASH" as const, run_light: false, run_turn: true, agent_questions: true, reasons: ["mode.no_flash.requested"],
     }));
     const b = session(nf.deps);
-    const d2 = b.s.start(true);
-    await vi.advanceTimersByTimeAsync(0);
-    nf.releaseFlush();
-    await vi.runAllTimersAsync();
-    await d2;
+    await runToEnd(nf, b.s.start(true));
     expect(nf.deps.lockForLight).not.toHaveBeenCalled();
   });
 });
