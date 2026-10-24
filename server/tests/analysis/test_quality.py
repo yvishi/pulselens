@@ -8,6 +8,7 @@ from pulselens.analysis.quality import assess, face_luma
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, TurnStep
+from tests.analysis.conftest import requalify
 
 W = 320
 THRESHOLDS = Thresholds.load()
@@ -53,7 +54,7 @@ def _session(*, fps: float = 30.0, luma: float = 120.0, neck_coverage: float = 1
     for r in regions.values():
         r.rgb_linear[absent] = np.nan
         r.coverage[absent] = 0.0
-    return dict(t=t, regions=regions, face_box=box, frame_w=W, events=events, challenge=ch)
+    return dict(t=t, regions=regions, face_box=box, events=events, challenge=ch)
 
 
 def test_a_clean_session_is_usable_in_every_window() -> None:
@@ -132,16 +133,11 @@ def test_build_context_fills_the_quality_report(genuine_ctx) -> None:
     assert all(w.usable for w in ctx.quality.windows.values())
 
 
-def _requalify(ctx) -> None:
-    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.frame_w, ctx.bundle.events, ctx.bundle.challenge,
-                         thresholds=ctx.thresholds)
-
-
 def test_light_response_abstains_with_the_window_reasons_when_too_dark(genuine_ctx) -> None:
     ctx = genuine_ctx
     for r in ctx.regions.values():
         r.rgb_linear *= 0.02  # chromaticity (and so the echo) is unchanged; only the brightness
-    _requalify(ctx)
+    requalify(ctx)
     [r] = light_response(ctx)
     assert r.status == "abstain" and not r.flag
     assert "light.too_few_steps" in r.reason_codes and "quality.too_dark" in r.reason_codes
@@ -152,7 +148,7 @@ def test_a_step_where_the_face_moved_is_left_out(genuine_ctx) -> None:
     c0 = next(e for e in ctx.bundle.events if e.step_id == "c0")
     during = (ctx.t >= c0.painted_t_ms) & (ctx.t <= c0.ended_t_ms)
     ctx.face_box[during, 0] += np.arange(during.sum()) * 20.0  # 20 px a frame: fast sideways movement
-    _requalify(ctx)
+    requalify(ctx)
     assert "quality.moving" in ctx.quality.windows["c0"].reasons
     [r] = light_response(ctx)
     assert r.status == "usable" and not r.flag and r.features["steps_valid"] == 5

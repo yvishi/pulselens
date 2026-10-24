@@ -25,7 +25,7 @@ import numpy as np
 
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
-from pulselens.analysis.reason_text import text
+from pulselens.analysis.reason_text import reason_text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.contracts import CheckResult, Plot, TurnStep
 
@@ -65,24 +65,23 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     step = next((s for s in ch.steps if isinstance(s, TurnStep)), None)
     if step is None:
         return []
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     event = next((e for e in ctx.bundle.events if e.step_id == step.step_id), None)
     if event is None or event.status != "shown" or event.painted_t_ms is None:
         why = f" ({event.skip_reason})" if event is not None and event.skip_reason else ""
-        return [abstain(*ids, ["turn.not_performed"], f"The turn prompt was not shown{why}.", window_id=step.step_id)]
+        return [abstain(SPEC, ["turn.not_performed"], f"The turn prompt was not shown{why}.", window_id=step.step_id)]
 
     p = ctx.thresholds.params(SPEC.check_id)
     painted = event.painted_t_ms
     ended = event.ended_t_ms if event.ended_t_ms is not None else painted + step.duration_ms
     end = ended + float(p.get("tail_ms", 500))
-    window = ctx.quality.windows.get(step.step_id) if ctx.quality is not None else None
+    window = ctx.quality.windows.get(step.step_id)
     if window is not None and "quality.low_fps" in window.reasons:
-        return [abstain(*ids, ["quality.low_fps"], f"The camera delivered {window.fps:.1f} fps during the turn, too "
+        return [abstain(SPEC, ["quality.low_fps"], f"The camera delivered {window.fps:.1f} fps during the turn, too "
                         "few to follow the head.", features={"fps": window.fps}, window_id=step.step_id)]
     unseen = [r for r in UNSEEN if window is not None and r in window.reasons]
     if unseen:
-        why = " and ".join(text(r).rstrip(".").lower() for r in unseen)
-        return [abstain(*ids, unseen, f"Unable to judge the turn: {why}, so the head angle cannot be trusted.",
+        why = " and ".join(reason_text(r).rstrip(".").lower() for r in unseen)
+        return [abstain(SPEC, unseen, f"Unable to judge the turn: {why}, so the head angle cannot be trusted.",
                         quality=window.luma_ok * (1 - window.saturated),
                         features={"luma_ok": window.luma_ok, "saturated": window.saturated},
                         window_id=step.step_id)]
@@ -90,12 +89,12 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     t, yaw = ctx.t, ctx.yaw
     before = (t >= painted - float(p.get("baseline_ms", 500))) & (t < painted) & np.isfinite(yaw)
     if before.sum() < 2:
-        return [abstain(*ids, ["quality.no_face"], "The face was not found just before the turn prompt, so there is "
+        return [abstain(SPEC, ["quality.no_face"], "The face was not found just before the turn prompt, so there is "
                         "no starting angle to compare with.", window_id=step.step_id)]
     yaw0 = float(np.median(yaw[before]))
     in_win = (t >= painted) & (t <= end)
     if not in_win.any():
-        return [abstain(*ids, ["quality.low_fps"], "No frames arrived during the turn.", window_id=step.step_id)]
+        return [abstain(SPEC, ["quality.low_fps"], "No frames arrived during the turn.", window_id=step.step_id)]
     seen = in_win & np.isfinite(yaw)
     face_present = float(seen.sum() / in_win.sum())
     sign = 1.0 if step.direction == "left" else -1.0
@@ -109,15 +108,13 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     features = {"peak_deg": peak, "wrong_peak_deg": wrong, "latency_ms": latency, "return_deg": ret,
                 "face_present": face_present, "yaw0_deg": yaw0}
     plot = _plot(t[in_win | before], yaw[in_win | before], painted, ended)
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
-    source, voting = ctx.thresholds.source(SPEC.check_id), ctx.thresholds.voting(SPEC.check_id)
     asked = f"to their {step.direction}"
 
     def usable(risk: float, reasons: list[str], explanation: str) -> list[CheckResult]:
         if latency is not None and latency < float(p.get("too_fast_ms", 150)):
             reasons = [*reasons, "turn.too_fast"]
-        return [result(*ids, risk=risk, flag_at=flag_at, quality=face_present, features=features, reasons=reasons,
-                       explanation=explanation, source=source, window_id=step.step_id, plot=plot, voting=voting)]
+        return [result(SPEC, ctx.thresholds, risk=risk, quality=face_present, features=features, reasons=reasons,
+                       explanation=explanation, window_id=step.step_id, plot=plot)]
 
     min_peak = float(p.get("min_peak_deg", 15))
     if wrong >= min_peak and peak < still:
@@ -139,9 +136,9 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                       f"The face was lost for {1 - face_present:.0%} of the turn (more than {max_lost:.0%}); a "
                       "hypothesis: a swapped face can drop out at large angles.")
     if face_present < float(ctx.thresholds.params("quality").get("min_face_present", 0.8)):
-        return [abstain(*ids, ["quality.no_face"], f"The face was visible in {face_present:.0%} of the turn and "
+        return [abstain(SPEC, ["quality.no_face"], f"The face was visible in {face_present:.0%} of the turn and "
                         f"moved at most {max(peak, wrong):.0f} degrees.", quality=face_present, features=features,
                         window_id=step.step_id)]
-    return [abstain(*ids, ["turn.not_performed"], f"The head moved at most {max(peak, wrong):.0f} degrees after the "
+    return [abstain(SPEC, ["turn.not_performed"], f"The head moved at most {max(peak, wrong):.0f} degrees after the "
                     f"prompt to turn {asked} (needs {min_peak:.0f} degrees), so the turn was not performed.",
                     quality=face_present, features=features, window_id=step.step_id)]

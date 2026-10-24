@@ -13,6 +13,14 @@ now a step's painted/ended times and linear colour instead of the old Pulse.
 `response` is separate from the onset: the mean chromaticity change over the step, in any direction, so a face that
 answers with the wrong colour is told apart from a face that does not answer at all.
 
+Two guards against calling weak or unsteady capture silent (issue #17):
+- a baseline that drifts makes the step invalid: a camera still settling (exposure, white balance) fakes or hides
+  an echo. Drift = the straight-line trend of the 500 ms before `painted` (which starts 200 ms after the previous
+  step's echo at the shortest gap) moving more than max(4 sigma around the trend, a_min) over 300 ms;
+- `hold_z` is the mean projection over the step in units of its standard error, so a face that answers below the
+  onset threshold still shows a consistent push towards the colour shown, which a face that never saw the light
+  does not.
+
 Pure: frame times, one region's series and one step in; dataclasses out. Never raises on bad data.
 """
 
@@ -28,6 +36,8 @@ BASELINE_MS = 300.0
 WINDOW_MS = 700.0
 K_SIGMA = 4.0
 MIN_BASELINE_FRAMES = 3
+DRIFT_MS = 500.0  # the trend is fitted over this long before `painted`: 300 ms holds too few frames at 15 fps
+MIN_DRIFT_FRAMES = 5
 MIN_COVERAGE = 0.5  # a frame counts for a region when at least this much of it is in view
 MIN_WINDOW_SHARE = 0.8  # share of the window's frames that must be usable
 RESPONSE_FROM_MS = 200.0  # the response window: from 200 ms after painted to 100 ms after the step ends
@@ -45,6 +55,8 @@ class EchoOnset:
     peak: float | None = None  # highest projection within the window, echo or not
     threshold: float | None = None
     sigma_pre: float | None = None
+    hold_mean: float | None = None  # mean projection over the response window, echo or not
+    hold_z: float | None = None  # hold_mean / its standard error; near 0 for a region the light never reached
     reason: str | None = None
     t_rel: np.ndarray = field(default_factory=lambda: np.empty(0))  # for plots: time after painted, ms
     p: np.ndarray = field(default_factory=lambda: np.empty(0))  # for plots: projection
@@ -132,8 +144,17 @@ def echo_onset(
         out.reason = "baseline not finite"
         return out
     thr = max(K_SIGMA * sigma, a_min)
+    pre = usable & (t >= painted - DRIFT_MS) & (t < painted)
+    if (drift := _drift(t[pre], p[pre])) is not None and drift > max(K_SIGMA * _resid_sigma(t[pre], p[pre]), a_min):
+        out.reason = "baseline drifting"
+        return out
     span = usable & (t >= painted - BASELINE_MS) & (t <= painted + WINDOW_MS + duration)
     out.valid, out.threshold, out.sigma_pre = True, thr, sigma
+    hold = usable & (t >= painted + RESPONSE_FROM_MS) & (t <= painted + duration + RESPONSE_AFTER_END_MS)
+    if hold.sum() >= 2:
+        out.hold_mean = float(np.mean(p[hold]))
+        se = sigma * np.sqrt(1.0 / hold.sum() + 1.0 / base.sum())
+        out.hold_z = out.hold_mean / se if se > 0 else None
     out.t_rel, out.p = t[span] - painted, p[span]
 
     idx = np.flatnonzero(usable & in_window)
@@ -174,6 +195,20 @@ def response(
     d = direction(colour)
     cosine = float(delta @ d / magnitude) if d is not None and magnitude > 0 else None
     return Response(magnitude=magnitude, cosine=cosine, threshold=thr)
+
+
+def _drift(t: np.ndarray, p: np.ndarray) -> float | None:
+    """How far the straight-line trend before the step moves over BASELINE_MS; None with too few frames."""
+    if len(t) < MIN_DRIFT_FRAMES:
+        return None
+    slope = np.polyfit(t - t.mean(), p, 1)[0]
+    return float(abs(slope) * BASELINE_MS)
+
+
+def _resid_sigma(t: np.ndarray, p: np.ndarray) -> float:
+    """Spread around the straight-line trend (a trend inflates the plain sigma)."""
+    fit = np.polyval(np.polyfit(t - t.mean(), p, 1), t - t.mean())
+    return float(np.std(p - fit, ddof=2))
 
 
 def _crossing(t: np.ndarray, p: np.ndarray, usable: np.ndarray, j: int, level: float) -> float:

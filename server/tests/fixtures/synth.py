@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import colorsys
 import json
+import random
 from pathlib import Path
 from typing import Literal
 
@@ -36,6 +37,7 @@ from pulselens.contracts import (
     Preflight,
     TurnStep,
 )
+from pulselens.engine import planner
 
 Kind = Literal["genuine", "replay", "swap_no_face_echo", "virtual_camera"]
 
@@ -100,21 +102,26 @@ def landmarks_478(chin_y: float = 150.0) -> list[list[float]]:
 
 
 def make_challenge(session_id: str, nonce: str, *, n_colour: int, turn: Literal["left", "right"] | None,
-                   rng: np.random.Generator) -> Challenge:
-    c = load_config()["challenge"]
-    mode = c["capable"]
-    steps: list[ColourStep | TurnStep] = []
-    end = 0
-    for k, hue in enumerate(list(c["hues_deg"])[:n_colour]):
-        start = 0 if k == 0 else end + int(rng.integers(mode["gap_ms"][0], mode["gap_ms"][1] + 1))
-        steps.append(ColourStep(step_id=f"c{k}", hue_deg=int(hue), start_offset_ms=start, dwell_ms=mode["dwell_ms"]))
-        end = start + mode["dwell_ms"]
-    if turn is not None:
-        start = end + c["turn_gap_ms"] if steps else 0
-        steps.append(TurnStep(step_id="t0", direction=turn, start_offset_ms=start, duration_ms=mode["turn_ms"]))
-        end = start + mode["turn_ms"]
-    return Challenge(session_id=session_id, nonce=nonce, mode="CAPABLE", baseline_ms=c["baseline_ms"], steps=steps,
-                     total_ms=end + 500)
+                   rng: random.Random) -> Challenge:
+    """The engine's own CAPABLE challenge (engine.planner.make_challenge: hues, gaps and the tail come from there),
+    cut to the first `n_colour` colour steps and turned the way asked. Steps after a cut colour step move earlier by
+    the time it took, so the schedule stays the planner's."""
+    plan = Plan(mode="CAPABLE", run_light=n_colour > 0, run_turn=turn is not None, agent_questions=False,
+                reasons=["mode.capable.ok"])
+    ch = planner.make_challenge(plan, session_id, nonce, rng, load_config())
+    colour = [s for s in ch.steps if isinstance(s, ColourStep)]
+    kept = colour[:n_colour]
+    assert len(kept) == n_colour, f"the planner offers {len(colour)} colour steps"
+    cut = (colour[-1].start_offset_ms + colour[-1].dwell_ms if colour else 0) - (
+        kept[-1].start_offset_ms + kept[-1].dwell_ms if kept else 0)
+    steps: list[ColourStep | TurnStep] = list(kept)
+    for s in ch.steps:
+        if isinstance(s, TurnStep) and turn is not None:
+            start = s.start_offset_ms - cut if kept else 0
+            steps.append(s.model_copy(update={"direction": turn, "start_offset_ms": start}))
+    shift = cut if kept or turn is None else next(
+        (s.start_offset_ms for s in ch.steps if isinstance(s, TurnStep)), 0)
+    return ch.model_copy(update={"steps": steps, "total_ms": ch.total_ms - shift})
 
 
 def challenge_events(ch: Challenge) -> list[ChallengeEvent]:
@@ -188,6 +195,13 @@ def make_session(
     turn_start_ms: float = 300.0,
     turn_returns: bool = True,
     face_lost_in_turn: float = 0.0,
+    echo_gain: float = 1.0,
+    face_pixel_noise_gain: float = 1.0,
+    flicker: float = 0.0,
+    flicker_exposure_ms: float = 8.0,
+    glare: bool = False,
+    chin_y_late: float | None = None,
+    jpeg_quality: int = 95,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -198,11 +212,19 @@ def make_session(
     wall's share of the screen light (a glossy replay screen filling the frame answers evenly, near 1).
     Turn: `turn_performed` is the direction actually turned, `turn_start_ms` the reaction time after the prompt,
     `turn_returns` whether the head comes back, `face_lost_in_turn` the share of the turn window (painted to
-    ended + 500 ms) at its peak where no face is found."""
+    ended + 500 ms) at its peak where no face is found.
+    `echo_gain`: how much of the screen light reaches the scene at all (a screen farther away or a brighter room);
+    around 0.02 the face's echo sits at the onset threshold, like the weak bright-room webcam session of issue #17.
+    `face_pixel_noise_gain`: the sensor noise inside the face box relative to the rest of the frame (below 1: a face
+    smoother than the real neck around it, as a repainted face may be).
+    Nuisances (G11): `flicker` is the depth of a 100 Hz room-light ripple (a tube light), averaged over
+    `flicker_exposure_ms` per frame, so it aliases at low fps; `glare` blows out a band across the forehead;
+    `chin_y_late` moves the face to that chin height from the session's midpoint on (near H: the neck leaves the
+    frame for the second half); `jpeg_quality` is the encoder quality (the browser sends 0.9, i.e. 90)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
-    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=rng)
+    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=random.Random(seed))
     events = challenge_events(ch)
 
     perfect = kind == "virtual_camera"
@@ -213,13 +235,14 @@ def make_session(
         t = np.sort(t + rng.normal(0, 1.0, len(t)))
         t = t - t[0]
 
-    face_k = K if kind == "genuine" else 0.0
-    neck_k = K * neck_gain if kind in ("genuine", "swap_no_face_echo") else 0.0
+    k_screen = K * echo_gain
+    face_k = k_screen if kind == "genuine" else 0.0
+    neck_k = k_screen * neck_gain if kind in ("genuine", "swap_no_face_echo") else 0.0
     lit = [e.shown_rgb for e in events if e.shown_rgb is not None]
     lit = [lit[(k + len(lit) // 2) % len(lit)] for k in range(len(lit))] if swap_colours and lit else None
     face = _light(t, interval, events, delay_ms, face_k, lit) * SKIN
     neck = _light(t, interval, events, delay_ms, neck_k, lit) * SHIRT
-    wall = _light(t, interval, events, delay_ms, background_echo * K) * WALL
+    wall = _light(t, interval, events, delay_ms, background_echo * k_screen) * WALL
     yaw = _yaw(t, events, ch, turn_followed, performed=turn_performed, start_ms=turn_start_ms,
                returns=turn_returns) + (0 if perfect else rng.normal(0, 0.5, len(t)))
     lost = np.zeros(len(t), dtype=bool)
@@ -229,19 +252,34 @@ def make_session(
         mid, half = (w0 + w1) / 2, face_lost_in_turn * (w1 - w0) / 2
         lost = (t >= mid - half) & (t <= mid + half)
 
-    fx0, fy0, fx1, fy1 = 120, int(chin_y - 110), 200, int(chin_y)
+    # Tube-light flicker: the room light ripples at 100 Hz; each frame averages it over its (short) exposure.
+    w100 = 2 * np.pi * 0.1  # rad per ms
+    a, b = t - flicker_exposure_ms, t
+    ripple = 1 + flicker * (np.sin(w100 * b) - np.sin(w100 * a)) / (w100 * flicker_exposure_ms) if flicker else None
+    late = t >= t[-1] / 2 if chin_y_late is not None else np.zeros(len(t), dtype=bool)
+    fx0, fx1 = 120, 200
     frames, lms = [], {}
-    lm = landmarks_478(chin_y)
     for i, ti in enumerate(t):
+        chin = chin_y_late if late[i] else chin_y
+        fy0, fy1 = int(chin - 110), int(chin)
+        lm = landmarks_478(chin)
         img = np.empty((H, W, 3), dtype=np.float32)
         img[:] = wall[i] + rng.normal(0, noise / 5, 3) if noise else wall[i]
         if face_in_frames:
             img[fy1:H, 130:190] = neck[i] + (rng.normal(0, noise / 5, 3) if noise else 0)
             img[fy0:fy1, fx0:fx1] = face[i] + (rng.normal(0, face_noise_gain * noise / 5, 3) if noise else 0)
         if noise:
-            img += _noise_field(rng) * np.float32(noise)
+            field = _noise_field(rng) * np.float32(noise)
+            if face_in_frames and face_pixel_noise_gain != 1.0:
+                field = field.copy()
+                field[fy0:fy1, fx0:fx1] *= np.float32(face_pixel_noise_gain)
+            img += field
+        if ripple is not None:
+            img *= np.float32(ripple[i])
+        if glare and face_in_frames:
+            img[fy0:fy0 + 35, fx0 + 10:fx1 - 10] = 1.0  # a blown-out highlight across the forehead
         srgb = _ENCODE[np.clip(img * (_ENCODE_STEPS - 1) + 0.5, 0, _ENCODE_STEPS - 1).astype(np.int32)]
-        ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95])
+        ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
         assert ok
         frames.append((FrameMeta(idx=i, t_ms=float(ti), w=W, h=H), jpeg.tobytes()))
         lms[i] = {"landmarks": lm, "yaw": float(yaw[i]), "pitch": 0.0} if face_in_frames and not lost[i] else None

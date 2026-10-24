@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from pulselens.analysis.context import AnalysisContext, build_context
+from pulselens.analysis.quality import assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.bundle import load_bundle
 from tests.fixtures.synth import make_session
@@ -42,6 +43,13 @@ class Synth:
         if key not in self._contexts:
             self._contexts[key] = build_context(load_bundle(self.session(**kw)), Thresholds.load())
         return copy.deepcopy(self._contexts[key])
+
+
+def requalify(ctx: AnalysisContext) -> AnalysisContext:
+    """Reruns the quality gate after a test changed the context's region series, face box or events."""
+    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.bundle.events, ctx.bundle.challenge,
+                         thresholds=ctx.thresholds)
+    return ctx
 
 
 @pytest.fixture(scope="session")

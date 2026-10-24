@@ -23,6 +23,9 @@ light.response:
   min_cosine: 0.5            # measured vs expected colour direction
   max_silent_threshold: 0.012  # 4x echo.a_min: a step with no echo whose 4-sigma threshold is above this cannot
                                # be called silent (unclear). A guess: check against real bright-room webcams at S2
+  faint_echo_z: 2.5          # steps without an echo, pooled: a mean push towards the colours of >= this many
+                             # standard errors means a faint echo (unclear), not silence (issue #17)
+  order_min_snr: 2.0         # a colour change must reach this x its threshold before a wrong direction counts
 
 light.face_neck:
   flag_at: 0.5
@@ -31,6 +34,8 @@ light.face_neck:
   ratio_log_tolerance: 1.386 # ln 4: skin and shirt reflect differently, so up to 4x either way scores nothing
   ratio_log_scale: 0.693     # ln 2 per score unit beyond that
   neck_only_steps: 2
+  faint_z: 3.0               # a face whose mean change over a step pushes towards the colour by >= this many standard
+                             # errors answered faintly: not silent, so not neck-only (issue #17)
 
 light.background:
   flag_at: 0.5
@@ -51,14 +56,19 @@ sensor.duplicates:
   min_frames: 30
   max_hamming: 2             # dHash bits
   max_mad: 0.5               # mean abs difference, 0..255, on a [::8] pixel grid
+  rel_mad: 0.1               # ... and an exact copy or under this x the session's median difference (G11)
 
 sensor.mode_probe:
   flag_at: 0.7
-  max_switch_ms: 150
+  max_switch_ms: 150         # the unusual mode delivered faster than this, with no missing frame: too perfect
+  unusual_size: [1000, 750]  # the mode real webcams rarely offer (Yash's PROBE_MODES)
 
 sensor.regions:
   flag_at: 0.5
-  ratio_log_tolerance: 0.916 # ln 2.5
+  ratio_log_tolerance: 0.916 # ln 2.5: face noise within 2.5x of the neck's and background's scores nothing
+  ratio_log_scale: 0.693     # ln 2 per score unit beyond that
+  min_frames: 20             # still frames with a face
+  min_jpeg_quality: 80       # below this the encoder wipes sensor noise (G11); the browser sends 90
 
 sensor.prnu:
   flag_at: 1.0
@@ -82,7 +92,11 @@ turn.identity:
   max_change: 0.15
 
 visual.sbi:
-  flag_at: 0.5
+  flag_at: 0.5               # provisional; G9 sets it from genuine set A
+  crops: 8
+  min_crops: 4
+  top_k: 3                   # risk = the mean of the top 3 crop scores
+  frontal_deg: 20            # crops from frames within this of the median yaw, when there are enough
 
 pulse.coherence:
   flag_at: 1.0

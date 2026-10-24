@@ -6,10 +6,16 @@ Per shown colour step, on the skin region:
 - order_ok = the measured colour change points the way of the colour shown (cosine >= 0.5), which catches a
   recording of a different session's colours. A step that changed colour the wrong way counts as wrong order, not
   as no echo.
-A step without an echo counts as silent only when its noise threshold could have heard one: at most half the median
-echo of the answered steps of the same session, and never above `max_silent_threshold`. Otherwise it is unclear and
-left out (the old repo's "unclear vs silent" fix; a bright-room webcam echo sits near the noise floor, SNR ~5), so
-noisy capture leads to an abstain and a retry, never a flag.
+A step that cannot be judged either way is unclear and left out, so weak or noisy capture leads to an abstain and a
+retry, never a flag (AGENTS.md rule 3; issue #17, a genuine bright-room webcam session that was flagged):
+- "noisy": no echo, and the noise threshold could not have heard one: above half the median echo of the session's
+  answered steps, or above `max_silent_threshold` (the old repo's "unclear vs silent" fix);
+- "faint": no echo, but the steps without one, pooled, still push towards the colours shown (`faint_echo_z` >=
+  2.5 standard errors): the face answered below the onset threshold, as under weak light, which a recording that
+  never saw this screen does not;
+- "weak_colour": an echo, but its colour change is under `order_min_snr` x its threshold, too small to read its
+  direction. Only a clear change the wrong way counts as wrong order.
+A step whose baseline drifts (a camera still settling) is invalid in echo.echo_onset and left out too.
 Risk = 1 - (answered and order_ok) / valid steps. Needs at least 4 valid steps. One webcam frame (64-96 ms) is longer
 than any lag limit, so the delay is a band, not a fine timing.
 
@@ -29,7 +35,7 @@ from pulselens.analysis import specs
 from pulselens.analysis.checks.light_common import colour_events, light_not_run, session_abstain
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.echo import EchoOnset, Response, echo_onset, response
-from pulselens.analysis.reason_text import text
+from pulselens.analysis.reason_text import reason_text
 from pulselens.analysis.result import abstain, guarded, result
 from pulselens.analysis.vision.linearize import srgb_to_linear
 from pulselens.contracts import CheckResult, Plot
@@ -46,7 +52,9 @@ class StepEcho:
     response: Response | None
     answered: bool
     order_ok: bool
-    clear: bool = True  # False: no echo, but the threshold was too high to call the step silent
+    strong: bool = False  # the colour change is at least `order_min_snr` x its threshold: its direction can be read
+    clear: bool = True  # False: the step cannot be judged either way (see `unclear`)
+    unclear: str | None = None  # "noisy", "faint" or "weak_colour"
     window_reasons: list[str] = field(default_factory=list)  # blocking quality reasons of the step's window
 
     @property
@@ -55,13 +63,24 @@ class StepEcho:
 
     @property
     def wrong_order(self) -> bool:
-        """The face changed colour during the step, but not towards the colour shown."""
-        r = self.response
-        return r is not None and r.responded and not self.order_ok
+        """The face changed colour clearly during the step, but not towards the colour shown."""
+        return self.strong and not self.order_ok
+
+    @property
+    def silent(self) -> bool:
+        """No echo onset and no clear wrong-colour change: silent, or unclear (decided in step_echoes)."""
+        return self.onset.valid and self.onset.onset_ms is None and not self.wrong_order
 
     @property
     def valid(self) -> bool:
         return self.onset.valid and self.clear and not self.window_reasons
+
+
+def faint_echo_z(steps: list[StepEcho]) -> float | None:
+    """The steps without an echo, pooled (Stouffer): their mean push towards the colour shown, in standard errors.
+    Near 0 when the light never reached the face; well above it when the face answered below the onset threshold."""
+    z = [s.onset.hold_z for s in steps if s.silent and not s.window_reasons and s.onset.hold_z is not None]
+    return float(np.sum(z) / np.sqrt(len(z))) if z else None
 
 
 def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
@@ -70,6 +89,7 @@ def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
     a_min = float(echo.get("a_min", 0.003))
     lo, hi = (float(x) for x in echo.get("delay_band_ms", (0, 300)))
     min_cos = float(p.get("min_cosine", 0.5))
+    order_snr = float(p.get("order_min_snr", 2.0))
     skin = ctx.regions["skin"]
     out = []
     for step, e in colour_events(ctx):
@@ -80,17 +100,24 @@ def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
         resp = response(ctx.t, skin, e.painted_t_ms, ended, colour, a_min=a_min) if onset.valid else None
         answered = onset.onset_ms is not None and lo <= onset.onset_ms <= hi
         order_ok = resp is not None and resp.responded and resp.cosine is not None and resp.cosine >= min_cos
-        window = ctx.quality.windows.get(step.step_id) if ctx.quality is not None else None
-        out.append(StepEcho(step.step_id, e.painted_t_ms, onset, resp, answered, order_ok,
+        strong = resp is not None and resp.cosine is not None and resp.magnitude >= order_snr * resp.threshold
+        window = ctx.quality.windows.get(step.step_id)
+        out.append(StepEcho(step.step_id, e.painted_t_ms, onset, resp, answered, order_ok, strong=strong,
                             window_reasons=window.blocking() if window is not None else []))
     # Silent only with the power to hear an echo: the session's own answered echoes, else the provisional cap.
     amps = [s.onset.amplitude for s in out if s.answered and not s.window_reasons and s.onset.amplitude is not None]
     hear = float(p.get("max_silent_threshold", 0.012))
     if amps:
         hear = min(hear, 0.5 * float(np.median(amps)))
+    faint = (z := faint_echo_z(out)) is not None and z >= float(p.get("faint_echo_z", 2.5))
     for s in out:
-        silent = s.onset.valid and s.onset.onset_ms is None and not s.wrong_order
-        s.clear = not silent or (s.onset.threshold is not None and s.onset.threshold <= hear)
+        if s.answered and not s.order_ok and not s.strong:
+            s.unclear = "weak_colour"  # an echo, but too small a colour change to read its direction
+        elif s.silent and not (s.onset.threshold is not None and s.onset.threshold <= hear):
+            s.unclear = "noisy"
+        elif s.silent and faint:
+            s.unclear = "faint"  # the face answered, below the onset threshold: weak light, not a recording
+        s.clear = s.unclear is None
     return out
 
 
@@ -105,27 +132,33 @@ def _plot(steps: list[StepEcho], markers: list[tuple[float, str]]) -> Plot:
 def run(ctx: AnalysisContext) -> list[CheckResult]:
     if light_not_run(ctx):
         return []
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     p = ctx.thresholds.params(SPEC.check_id)
     if (gate := session_abstain(ctx, SPEC, "time the light response")) is not None:
         return [gate]
 
     steps = step_echoes(ctx)
     valid = [s for s in steps if s.valid]
-    unclear = sum(s.onset.valid and not s.clear and not s.window_reasons for s in steps)
+    judged = [s for s in steps if s.onset.valid and not s.window_reasons]
+    unclear = sum(not s.clear for s in judged)
     poor = [s for s in steps if s.window_reasons]
     min_steps = int(p.get("min_steps", 4))
     quality = len(valid) / len(steps)
+    faint_z = faint_echo_z(steps)
     if len(valid) < min_steps:
         window_reasons = sorted({r for s in poor for r in s.window_reasons})
-        why = f"; {unclear} were too noisy to tell an echo from silence" if unclear else ""
+        why = "".join(f"; {n} {what}" for n, what in (
+            (sum(s.unclear == "noisy" for s in judged), "were too noisy to tell an echo from silence"),
+            (sum(s.unclear == "faint" for s in judged), "answered too faintly to time (weak light, not silence)"),
+            (sum(s.unclear == "weak_colour" for s in judged), "changed too little to read the colour"),
+        ) if n)
         if poor:
-            why += f"; {len(poor)} had poor capture ({', '.join(text(r).rstrip('.').lower() for r in window_reasons)})"
-        return [abstain(*ids, ["light.too_few_steps"] + ["light.weak_face_echo"] * (unclear > 0) + window_reasons,
+            what = ", ".join(reason_text(r).rstrip(".").lower() for r in window_reasons)
+            why += f"; {len(poor)} had poor capture ({what})"
+        return [abstain(SPEC, ["light.too_few_steps"] + ["light.weak_face_echo"] * (unclear > 0) + window_reasons,
                         f"Only {len(valid)} of {len(steps)} colour steps could be judged on the face (need "
                         f"{min_steps}){why}.", quality=quality,
                         features={"steps_valid": len(valid), "steps_shown": len(steps), "steps_unclear": unclear,
-                                  "steps_poor_quality": len(poor)},
+                                  "steps_poor_quality": len(poor), "faint_echo_z": faint_z},
                         window_id="all")]
 
     answered = [s for s in valid if s.answered]
@@ -153,9 +186,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                        "saw this screen would.")
     return [
         result(
-            *ids,
+            SPEC, ctx.thresholds,
             risk=risk,
-            flag_at=flag_at,
             quality=quality,
             features={
                 "steps_valid": len(valid),
@@ -165,12 +197,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                 "median_snr": float(np.median(snrs)) if snrs else None,
                 "steps_unclear": unclear,
                 "steps_poor_quality": len(poor),
+                "faint_echo_z": faint_z,
             },
             reasons=reasons,
             explanation=explanation,
-            source=ctx.thresholds.source(SPEC.check_id),
             window_id="all",
             plot=_plot([s for s in steps if s.onset.valid], [(s.painted, s.step_id) for s in steps]),
-            voting=ctx.thresholds.voting(SPEC.check_id),
         )
     ]

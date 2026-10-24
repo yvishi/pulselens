@@ -1,5 +1,8 @@
 # owned by Ganeev
 # mediapipe brings opencv-contrib-python (cv2). Do not add opencv-python-headless: it would overwrite the same cv2.
 mediapipe>=0.10,<0.11
-scipy
 matplotlib
+# visual.sbi (G7). On Windows and macOS the PyPI torch wheel is CPU-only; on Linux use the CPU index
+# (pip install torch --index-url https://download.pytorch.org/whl/cpu) to avoid the CUDA download.
+torch
+efficientnet_pytorch
