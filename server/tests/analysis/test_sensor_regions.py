@@ -26,15 +26,22 @@ def test_equal_noise_is_not_flagged(synth) -> None:
     assert "hypothesis" in r.explanation
 
 
-@pytest.mark.parametrize("gain", [0.25, 4.0])
-def test_a_face_4x_smoother_or_noisier_than_the_neck_is_noted_and_flags_once_voting(synth, gain: float) -> None:
+@pytest.mark.parametrize("gain,expect_mismatch", [(0.25, True), (6.0, True), (4.0, False)])
+def test_a_face_smoother_or_noisier_than_the_neck_cutoff_behavior(synth, gain: float, expect_mismatch: bool) -> None:
     ctx = synth.context(kind="genuine", noise=REAL_NOISE, face_pixel_noise_gain=gain)
+    flag_at = ctx.thresholds.flag_at("sensor.regions")
     r = _one(ctx)  # measured, not voting until calibrated (S2: real faces were up to 5.4x their shirt)
-    assert not r.flag and r.risk >= 0.5 and r.reason_codes == ["sensor.regions_mismatch"], r.explanation
-    full = _read(PROVISIONAL)
-    ctx.thresholds = Thresholds(full, {"sensor.regions": {"voting": True}})
-    r = _one(ctx)
-    assert r.flag and r.reason_codes == ["sensor.regions_mismatch"]
+    assert not r.flag and r.risk >= 0.5
+    if expect_mismatch:
+        assert r.risk >= flag_at and r.reason_codes == ["sensor.regions_mismatch"], r.explanation
+        full = _read(PROVISIONAL)
+        cal = dict(ctx.thresholds._calibrated)
+        cal["sensor.regions"] = {**cal.get("sensor.regions", {}), "voting": True}
+        ctx.thresholds = Thresholds(full, cal)
+        r = _one(ctx)
+        assert r.flag and r.reason_codes == ["sensor.regions_mismatch"]
+    else:
+        assert r.risk < flag_at and r.reason_codes == [], r.explanation
     assert r.features["noise_face_neck_ratio"] == pytest.approx(gain, rel=0.25)
 
 
