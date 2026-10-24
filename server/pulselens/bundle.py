@@ -10,14 +10,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from pulselens.contracts import Challenge, ChallengeEvent, FrameMeta, Label, Plan, Preflight
+from pulselens.contracts import (
+    AgentDecision,
+    Challenge,
+    ChallengeEvent,
+    CheckResult,
+    Decision,
+    FrameMeta,
+    Label,
+    Plan,
+    Preflight,
+)
 
 if TYPE_CHECKING:
     import numpy as np
 
 FRAME_FIELDS = set(FrameMeta.model_fields)
+_RESULTS = TypeAdapter(list[CheckResult])
 
 
 def frame_name(idx: int) -> str:
@@ -70,6 +81,9 @@ class Bundle:
     frames: list[FrameMeta]  # sorted by idx
     events: list[ChallengeEvent]
     label: Label | None
+    results: list[CheckResult] = field(default_factory=list)  # analysis output; [] until analysed
+    decision: Decision | None = None
+    agent_decision: AgentDecision | None = None
     skipped_lines: int = field(default=0)  # unreadable lines in frames.jsonl and events.jsonl
     # every readable frames.jsonl line as written, repeats included, with the engine's batch_seq and
     # received_at_ms: integrity (K5) needs the repeats and the batch numbers that `frames` drops
@@ -116,6 +130,10 @@ def load_bundle(path: Path) -> Bundle:
             skipped += 1
         else:
             events.append(event)
+    try:
+        results = _RESULTS.validate_python(_read_json(path / "results.json"))
+    except ValidationError:  # missing file, non-list or bad row: no results
+        results = []
     return Bundle(
         path=path,
         session=session,
@@ -125,6 +143,9 @@ def load_bundle(path: Path) -> Bundle:
         frames=[frames[i] for i in sorted(frames)],
         events=events,
         label=_model(Label, session.get("label")),
+        results=results,
+        decision=_model(Decision, _read_json(path / "decision.json")),
+        agent_decision=_model(AgentDecision, _read_json(path / "agent.json")),
         skipped_lines=skipped,
         frame_rows=frame_rows,
     )
