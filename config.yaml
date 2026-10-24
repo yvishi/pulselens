@@ -21,5 +21,6 @@ session:
   max_frames: 900
   max_batch_frames: 30
   max_jpeg_kb: 200
+  delete_frames_on_decision: true
 analysis:
   timeout_s: 120

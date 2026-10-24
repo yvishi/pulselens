@@ -3,6 +3,7 @@
 Only Keshav (and Keshav's agent) edits this file. Newest notes first in each section.
 
 ## Tasks
+- [x] Delete raw frames on decision: `SessionStore` deletes `folder/frames` for unlabelled (/customer) sessions when agent decides, preserving lab sessions. Appends audit event `frames.deleted`, verified by audit; `frame_count` fallback to `frames.jsonl`. 4 tests in `test_store.py` and `test_audit.py`. 2026-10-24.
 - [x] Video ingest script: `scripts/ingest_video.py` converts judge video clips into real session bundles, matches challenges, runs full analysis, writes audit chain, and displays on console. 3 tests in `test_ingest_video.py`. 2026-10-24.
 - [x] K1 — scaffold and contract: `contracts.py` verbatim from CONTRACT §3, `contracts.ts` mirror, `bundle.py`, `config.py`, health route, `scripts/dev.py` (8 targets), web scaffold with the 5 final routes and Yash placeholders, typed `api/client.ts`. pytest 5 passed + 2 skipped (7 of 7 with OpenCV installed), vitest 5 passed, lint clean, Brave e2e 1 passed. 2026-10-22.
 - [x] K2 — sessions API and storage: rows 2–8 of CONTRACT §2 in `api/sessions.py`, `engine/store.py` (`SessionStore`, re-entrant lock per session), `engine/auth.py` (HMAC customer token, in-memory secret, constant-time compare), `fusion.customer_message`. 17 tests incl. single-use challenge under 8 concurrent requests, 413 limits (31 frames, 201 KB, the 901st frame), expiry 410, path tricks 404, and no risk/flag/check_id/family/outcome in any customer response. 2026-10-23.
@@ -17,6 +18,7 @@ Only Keshav (and Keshav's agent) edits this file. Newest notes first in each sec
 - [x] K11 — hardening: `engine/purge.py::purge` deletes unlabelled sessions older than 60 min at server start and every 10 min (never an unreadable or "analysing" one); `scripts/purge.py` (`--all-volunteers` needs the typed `DELETE`). Console "Reset demo" hides every session present at the click (cutoff = newest `created_at_ms`, server time only, rule 1) and "Show all" undoes it; the task text said "older than 1 h", which needs the browser clock. The unreachable message already existed; analysis keeps its timeout. Tests: 8 pytest, 4 vitest. 2026-10-24.
 
 ## Decisions
+- **delete_frames_on_decision: raw JPEGs deleted on agent decision for customer sessions only**, preserving lab sessions for model calibration; SessionStore.frame_count gracefully falls back to frames.jsonl rows.
 - **ingest_video: short videos loop frames to span challenge duration**, ensuring all challenge step windows contain frames without premature low_fps/too_few_frames abstains; repeats naturally trigger sensor.duplicates for replay detection.
 - **K7: frame images are fetched with the passcode header and shown as blob URLs**, because an `<img src>` cannot send `X-Agent-Passcode`. The evidence frame for a step is chosen from its painted time × the measured fps (the report has no per-frame times); good enough for a thumbnail.
 - **K7: `agent.json` also stores `at_ms`** (when the agent acted); `SessionReport.agent_decision` returns only the contract fields.
