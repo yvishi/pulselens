@@ -3,7 +3,7 @@ import pytest
 
 from pulselens.analysis import analyze
 from pulselens.analysis.checks import turn_follow
-from pulselens.analysis.quality import assess
+from tests.analysis.conftest import requalify
 
 
 def _one(ctx):
@@ -69,9 +69,7 @@ def _requality(ctx, skin_in_turn: float):
     ev = next(e for e in ctx.bundle.events if e.step_id == "t0")
     in_turn = (ctx.t >= ev.painted_t_ms) & (ctx.t <= ev.ended_t_ms + 500)
     ctx.regions["skin"].rgb_linear[in_turn] = skin_in_turn
-    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.frame_w, ctx.bundle.events, ctx.bundle.challenge,
-                         thresholds=ctx.thresholds)
-    return ctx
+    return requalify(ctx)
 
 
 @pytest.mark.parametrize(("skin", "reason"), [(0.005, "quality.too_dark"), (0.99, "quality.clipped")])

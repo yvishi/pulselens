@@ -7,9 +7,9 @@ import pytest
 from pulselens.analysis import analyze
 from pulselens.analysis.checks import light_background, light_face_neck
 from pulselens.analysis.context import AnalysisContext, build_context
-from pulselens.analysis.quality import assess
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.bundle import load_bundle
+from tests.analysis.conftest import requalify
 from tests.fixtures.synth import H
 
 
@@ -31,11 +31,6 @@ def face_neck(ctx):
 
 def background(ctx):
     return _one(light_background, ctx, "light.background")
-
-
-def _requalify(ctx: AnalysisContext) -> None:
-    ctx.quality = assess(ctx.t, ctx.regions, ctx.face_box, ctx.frame_w, ctx.bundle.events, ctx.bundle.challenge,
-                         thresholds=ctx.thresholds)
 
 
 @pytest.fixture
@@ -97,7 +92,7 @@ def test_a_neck_half_out_of_frame_abstains(synth) -> None:
 def test_a_saturated_neck_abstains(genuine: AnalysisContext) -> None:
     ctx = genuine
     ctx.regions["neck"].rgb_linear[:] = 0.99
-    _requalify(ctx)
+    requalify(ctx)
     r = face_neck(ctx)
     assert r.status == "abstain" and "quality.clipped" in r.reason_codes
 
