@@ -13,7 +13,7 @@ export const OUTCOME_TITLE: Record<Outcome, string> = {
 export const STEP_UP_PLAIN: Record<StepUp, string> = {
   fresh_challenge: "Send a new link for a fresh check.",
   no_flash: "Send a new link without flashing light.",
-  agent_checks: "Ask the customer a few questions and check their documents.",
+  agent_checks: "Ask the live questions in the decision panel and check their documents.",
   assisted_kyc: "Follow the bank's assisted-KYC process (branch or business correspondent).",
 };
 

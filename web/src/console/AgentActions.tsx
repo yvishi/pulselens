@@ -33,10 +33,12 @@ interface Props {
   stepUp?: StepUp | null;
   /** the customer asked for no flashing light: every new link they get keeps that */
   customerNoFlash?: boolean;
+  /** the live-question ticks, appended to the saved note */
+  checksNote?: string;
 }
 
 /** The agent's call. Re-verify also creates the next attempt and shows its customer link. */
-export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded, outcome, stepUp, customerNoFlash }: Props) {
+export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded, outcome, stepUp, customerNoFlash, checksNote }: Props) {
   const id = useId();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,7 +60,7 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
     setError(null);
     setConfirming(false);
     try {
-      await postAgentDecision(sessionId, passcode, { action, note });
+      await postAgentDecision(sessionId, passcode, { action, note: checksNote ? [note.trim(), checksNote].filter(Boolean).join("\n") : note });
       setAt(new Date().toLocaleTimeString());
       if (action === "reverify") {
         const created = await createSession({ product, previous_session_id: sessionId, no_flash: stepUp === "no_flash" || Boolean(customerNoFlash) });

@@ -236,6 +236,43 @@ describe("ConsoleSession", () => {
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^Approved/));
   });
 
+  describe("live questions card", () => {
+    const CARD = "Live questions to ask";
+
+    it("shows when the plan has agent questions", async () => {
+      api.getResult.mockResolvedValue({ ...REPORT, plan: { ...REPORT.plan!, agent_questions: true } });
+      at("/console/d79105c5121a3cb3");
+      expect(await screen.findByRole("heading", { name: CARD })).toBeTruthy();
+      expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    });
+
+    it("shows for the agent_checks step-up", async () => {
+      api.getResult.mockResolvedValue({ ...REPORT, decision: { ...DECISION, outcome: "RETRY_STEP_UP", step_up: "agent_checks" } });
+      at("/console/d79105c5121a3cb3");
+      expect(await screen.findByRole("heading", { name: CARD })).toBeTruthy();
+    });
+
+    it("is absent otherwise", async () => {
+      api.getResult.mockResolvedValue(REPORT);
+      at("/console/d79105c5121a3cb3");
+      await screen.findByRole("region", { name: "Your decision" });
+      expect(screen.queryByRole("heading", { name: CARD })).toBeNull();
+    });
+
+    it("saves the ticks with the decision note", async () => {
+      api.getResult.mockResolvedValue({ ...REPORT, plan: { ...REPORT.plan!, agent_questions: true } });
+      api.postAgentDecision.mockResolvedValue(undefined);
+      at("/console/d79105c5121a3cb3");
+      const boxes = await screen.findAllByRole("checkbox");
+      fireEvent.click(boxes[0]!);
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "ok" } });
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Approve" })));
+      const note = api.postAgentDecision.mock.calls[0]![2].note as string;
+      expect(note.startsWith("ok\nLive checks: ")).toBe(true);
+      expect(note).toContain(" done; ");
+    });
+  });
+
   it("re-verify creates the next attempt and shows its customer link", async () => {
     api.getResult.mockResolvedValue(REPORT);
     api.postAgentDecision.mockResolvedValue(undefined);
