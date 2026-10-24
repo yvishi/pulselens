@@ -3,7 +3,9 @@
 Re-runs analyze() on every labelled set A session. For each voting check, flag_at becomes just above the 97.5th
 percentile of its risk on genuine sessions (usable results only), so at most 1 genuine session in 40 is flagged
 (a result flags when risk >= flag_at). With fewer than 20 genuine usable results the provisional value stays, and the
-report says so. Writes server/pulselens/analysis/thresholds.calibrated.yaml: {check_id: {flag_at, n_genuine, source}}.
+report says so. Numerically zero upper quantiles also retain the provisional cutoff: they do not support a
+new positive decision boundary. Writes server/pulselens/analysis/thresholds.calibrated.yaml:
+{check_id: {flag_at, n_genuine, source}}.
 
 Never reads set B: sessions are filtered to set A first, and a set B session left after that is a programming error
 that stops the script.
@@ -58,7 +60,13 @@ def calibrate(rows: list[Row], provisional: Thresholds) -> tuple[dict[str, dict]
         if len(risks) < MIN_GENUINE:
             report.append((spec.check_id, len(risks), provisional.flag_at(spec.check_id), "provisional"))
             continue
-        flag_at = float(np.nextafter(np.percentile(risks, PERCENTILE), np.inf))
+        upper = float(np.percentile(risks, PERCENTILE))
+        if not np.isfinite(upper) or upper <= np.finfo(float).eps:
+            # Zero/roundoff-only genuine scores do not justify flagging every positive risk.
+            # Keep the pre-existing floor and its honest provisional provenance.
+            report.append((spec.check_id, len(risks), provisional.flag_at(spec.check_id), "provisional"))
+            continue
+        flag_at = float(np.nextafter(upper, np.inf))
         out[spec.check_id] = {"flag_at": flag_at, "n_genuine": len(risks), "source": "calibrated"}
         report.append((spec.check_id, len(risks), flag_at, "calibrated"))
     return out, report
