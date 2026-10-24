@@ -4,8 +4,8 @@
  * camera -> runPreflight (+ coaching measure) -> up to 3 coaching rounds, then runPreflight again -> postPreflight (Plan) -> getChallenge -> FrameGrabber (t0 = challenge start) + runChallenge
  * on a LightOverlay (exposure locked around it behind ?lock=1) -> postEvents -> uploader.flush() (15 s cap) -> completeSession -> getStatus every 1 s until done.
  *
- * The server's plan decides what runs: on a NO_FLASH plan (or run_light false) every colour step is skipped
- * ("no_flash"), so nothing is painted and only the turn runs; the agent then asks a few questions.
+ * The server's plan decides what runs: a NO_FLASH plan (or run_light false) gets a challenge with no colour steps,
+ * so nothing is painted and only the turn runs; the agent then asks a few questions.
  * completeSession is never called while a frame batch is in flight (the uploader is flushed or stopped first).
  *
  * Hardening (Y9): an fps drop (< 12 fps over the last 2 s) skips the remaining colour steps ("fps_drop"), never the
@@ -36,15 +36,12 @@ export type CustomerPhase =
 
 /**
  * Error details: "insecure" (no HTTPS / no camera API), "camera_denied", "camera_missing", "camera_busy",
- * "camera_error", "expired", "failed". Result detail: the CustomerStatus.message.
+ * "camera_error", "expired", "failed".
  */
 export type CaptureErrorDetail =
   | "insecure" | "camera_denied" | "camera_missing" | "camera_busy" | "camera_error" | "expired" | "failed";
 
-export interface CaptureState {
-  phase: CustomerPhase;
-  /** result: the CustomerMessage; error: a CaptureErrorDetail */
-  detail?: string;
+interface CaptureCommon {
   /** from the Plan, once known: the agent will ask a few questions (no-flash path, no face found) */
   agentQuestions?: boolean;
   /** coaching: at most 2 tips for this round */
@@ -52,6 +49,14 @@ export interface CaptureState {
   /** set once 2 frame batches have failed: "Weak connection, still sending" (kept until the end) */
   weakConnection?: boolean;
 }
+
+/** result carries the CustomerStatus.message; error carries why ("no_token" comes from CaptureFlow, never the session). */
+export type CaptureState = CaptureCommon &
+  (
+    | { phase: Exclude<CustomerPhase, "result" | "error"> }
+    | { phase: "result"; message: CustomerMessage }
+    | { phase: "error"; error: CaptureErrorDetail | "no_token" }
+  );
 
 export interface CaptureApi {
   postPreflight(id: string, token: string, body: Preflight): Promise<Plan>;
@@ -95,6 +100,8 @@ export interface CaptureSessionDeps {
   createUploader: (opts: UploaderOptions) => SessionUploader;
   runChallenge: typeof runChallenge;
   createCoachMeter: (video: HTMLVideoElement) => CoachMeter;
+  /** the session's one face tracker (null when it cannot load), shared by preflight, coaching and the turn prompt */
+  faceTracker: () => Promise<FaceTracker | null>;
   /** whether to try the exposure lock (the ?lock=1 experiment) */
   shouldLock: (pf: Preflight) => boolean;
   lockForLight: (track: MediaStreamTrack, fps: number | null) => Promise<{ lock: CameraLock | null; restore: () => Promise<void> }>;
@@ -112,8 +119,6 @@ export interface CaptureSessionOptions {
   turnPrompt?: TurnPromptFactory;
   /** turn prompt text per direction (customer strings) */
   turnText?: (dir: TurnDirection) => string;
-  /** an extra reason to skip the next colour step (Y9: "fps_drop"); "page_hidden" is built in */
-  shouldSkipLight?: (grabber: SessionGrabber | null) => string | null;
   deps?: Partial<CaptureSessionDeps>;
 }
 
@@ -128,7 +133,7 @@ export const WEAK_AFTER_FAILED_BATCHES = 2;
 
 const DEFAULT_TURN_TEXT = (dir: TurnDirection) => `Turn your head to your ${dir.toUpperCase()}, then back to the centre`;
 
-/** One face tracker per page, shared by the preflight and the coaching meter (loading it twice is slow). */
+/** One face tracker per page, shared by the preflight, the coaching meter and the turn prompt (loading it twice is slow). */
 let sharedTracker: Promise<FaceTracker | null> | null = null;
 const faceTracker = () => (sharedTracker ??= createFaceTracker().catch(() => null));
 
@@ -149,6 +154,7 @@ export const defaultDeps = (): CaptureSessionDeps => ({
   createUploader: (opts) => new FrameUploader(opts),
   runChallenge,
   createCoachMeter: (video) => createCoachMeter(video, faceTracker()),
+  faceTracker,
   shouldLock: (pf) => typeof location !== "undefined" && shouldLock(pf, location.search),
   lockForLight,
   now,
@@ -193,9 +199,11 @@ export class CaptureSession {
     return this.uploader?.stats() ?? null;
   }
 
-  private set(patch: Partial<CaptureState> & { phase: CustomerPhase }): void {
+  private set(next: CaptureState): void {
     if (this.disposed) return;
-    this.state = { ...this.state, detail: undefined, tips: undefined, ...patch };
+    // agentQuestions and weakConnection stick; tips and the result/error payload belong to one phase
+    const { agentQuestions, weakConnection } = this.state;
+    this.state = { agentQuestions, weakConnection, ...next };
     this.opts.onState(this.state);
   }
 
@@ -212,7 +220,7 @@ export class CaptureSession {
     this.started = true;
     const d = this.deps;
     const { sessionId: id, token, video } = this.opts;
-    if (d.secureContextError()) return this.set({ phase: "error", detail: "insecure" });
+    if (d.secureContextError()) return this.set({ phase: "error", error: "insecure" });
     const mobile = d.isMobile();
     const size = mobile ? MOBILE_SIZE : DESKTOP_SIZE;
     const overlayMode = d.chooseOverlayMode(!mobile); // first, inside the gesture
@@ -239,13 +247,13 @@ export class CaptureSession {
       this.set({ phase: "waiting" });
       await d.api.completeSession(id, token);
       const message = await this.poll();
-      this.set({ phase: "result", detail: message });
+      this.set({ phase: "result", message });
     } catch (e) {
       if (!(e instanceof CameraFailed)) console.error("capture session failed", e);
-      const detail: CaptureErrorDetail =
+      const error: CaptureErrorDetail =
         e instanceof CameraFailed ? e.detail : e instanceof ApiError && e.status === 410 ? "expired" : "failed";
       await this.uploader?.stop();
-      this.set({ phase: "error", detail });
+      this.set({ phase: "error", error });
     } finally {
       this.cleanup();
     }
@@ -296,13 +304,11 @@ export class CaptureSession {
     }));
     grabber.start();
     const showTurnPrompt = (this.opts.turnPrompt ?? textTurnPrompt)({
-      overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT,
+      overlay, video, text: this.opts.turnText ?? DEFAULT_TURN_TEXT, faceTracker: d.faceTracker,
     });
     const fpsDrop = fpsDropSkip(grabber);
     const shouldSkipLight = () =>
-      (noFlash ? "no_flash" : null) ??
-      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ??
-      fpsDrop() ?? this.opts.shouldSkipLight?.(grabber) ?? null;
+      (typeof document !== "undefined" && document.hidden ? "page_hidden" : null) ?? fpsDrop() ?? null;
     try {
       return await d.runChallenge(challenge, { overlay, t0, showTurnPrompt, shouldSkipLight });
     } finally {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { WEB } from "./support/bundle";
+import { FORBIDDEN_WORDS, WEB } from "./support/bundle";
 import { readSessionFile } from "./support/sessionFile";
 
 // Y8: the Lab recording page in Brave's fake camera, against the real server (PULSE_DATA_DIR=data/e2e).
@@ -46,7 +46,7 @@ test("a full recording writes session.json with the label", async ({ page }) => 
   expect(id).toMatch(/^[0-9a-f]{16}$/);
   expect(readSessionFile(id)?.label).toEqual(LABEL);
   const text = await page.locator("main").innerText();
-  for (const word of ["score", "PASS", "risk", "family", "outcome"]) expect(text).not.toContain(word);
+  for (const word of FORBIDDEN_WORDS) expect(text, word).not.toContain(word);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // "Record another (same settings)" makes a new session with the same label.

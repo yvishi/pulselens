@@ -1,6 +1,7 @@
 /**
  * Runs a server Challenge on the device (CONTRACT section 3): neutral grey for baseline_ms, then each step at its
- * start_offset_ms after the baseline. A colour step paints, holds for dwell_ms and clears; a turn step hands over
+ * start_offset_ms after the baseline. Steps are scheduled from t0 (t0 + baseline_ms + start_offset_ms), so setup
+ * between t0 and this call does not shift them and they line up with the server's scheduled step windows. A colour step paints, holds for dwell_ms and clears; a turn step hands over
  * to showTurnPrompt. Every colour change goes through a FlashLimiter (>= 334 ms apart, so <= 3 per second).
  */
 import type { Challenge, ChallengeEvent, ColourStep } from "../contracts";
@@ -18,7 +19,7 @@ export interface ChallengeDeps {
   t0: number;
   /** Shows the turn prompt; resolves with painted/ended in ms since t0. */
   showTurnPrompt: (dir: "left" | "right", durationMs: number) => Promise<{ painted: number; ended: number }>;
-  /** A reason to skip the next colour step ("fps_drop", "page_hidden", "no_flash") or null. */
+  /** A reason to skip the next colour step ("fps_drop", "page_hidden") or null. */
   shouldSkipLight: () => string | null;
 }
 
@@ -58,7 +59,8 @@ export async function runChallenge(ch: Challenge, deps: ChallengeDeps): Promise<
   overlay.t0 = t0;
   const limiter = new FlashLimiter();
   const change = (apply: () => Promise<number>) => limiter.change(apply, (t) => t + t0);
-  const stepsStart = now() + ch.baseline_ms; // the overlay is already neutral grey for the baseline
+  // Scheduled from t0, not from now(): setup after t0 must not shift the steps off the server's step windows.
+  const stepsStart = t0 + ch.baseline_ms; // the overlay is already neutral grey for the baseline
   const events: ChallengeEvent[] = [];
 
   for (const step of [...ch.steps].sort((a, b) => a.start_offset_ms - b.start_offset_ms)) {
