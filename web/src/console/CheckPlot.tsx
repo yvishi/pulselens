@@ -2,7 +2,13 @@ import { useEffect, useRef } from "react";
 import type uPlot from "uplot";
 import type { Plot } from "../contracts";
 
-const COLOURS = ["#0f6e56", "#185fa5", "#993c1d", "#5f5e5a"];
+/** Series colours come from the design tokens, so the plot follows light and dark mode. */
+const COLOUR_TOKENS = ["--stamp", "--ok", "--warn", "--ink-soft"];
+
+function seriesColours(el: HTMLElement): string[] {
+  const css = getComputedStyle(el);
+  return COLOUR_TOKENS.map((t) => css.getPropertyValue(t).trim() || "currentColor");
+}
 
 /** Series that share no x values are merged onto one x axis (null where a series has no point). */
 export function alignSeries(plot: Plot): { names: string[]; data: (number | null)[][] } {
@@ -41,13 +47,14 @@ export function CheckPlot({ plot, title }: { plot: Plot; title: string }) {
 
 function draw(UPlot: typeof uPlot, el: HTMLElement, plot: Plot): uPlot {
   const { names, data } = alignSeries(plot);
+  const colours = seriesColours(el);
   const chart = new UPlot(
     {
       width: Math.max(280, el.clientWidth || 560),
       height: 200,
       scales: { x: { time: false } },
       axes: [{ label: "ms" }, {}],
-      series: [{}, ...names.map((n, k) => ({ label: n, stroke: COLOURS[k % COLOURS.length], spanGaps: true }))],
+      series: [{}, ...names.map((n, k) => ({ label: n, stroke: colours[k % colours.length], spanGaps: true }))],
     },
     data as uPlot.AlignedData,
     el,

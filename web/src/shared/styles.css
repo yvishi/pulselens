@@ -1,4 +1,14 @@
-/* Mobile-first base (360 px first). Body text is at least 16 px. */
+/*
+ * PulseLens design system. Every page derives its colour and type from these tokens.
+ *
+ * Direction: an Indian bank's verification desk. Cool paper, bank-pen navy ink, and one accent: the violet of the
+ * stamp-pad ink every branch uses. The outcome colours (ok / warn / stop) are reserved for the recommendation and
+ * never used for decoration. Type: Familjen Grotesk for headings (used sparingly), Atkinson Hyperlegible for body
+ * text (designed for legibility, so a non-technical agent reads it at a glance), its Mono for ids and codes, and Mukta
+ * for Hindi. Mobile first (360 px); body text at least 16 px.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Familjen+Grotesk:wght@500;600;700&family=Mukta:wght@400;600&display=swap");
+
 *,
 *::before,
 *::after {
@@ -6,35 +16,484 @@
 }
 
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+
+  /* colour */
+  --paper: #f3f5f9;
+  --surface: #ffffff;
+  --surface-sunk: #e9edf4;
+  --ink: #16233f;
+  --ink-soft: #4a5774;
+  --line: #d3d9e4;
+  --stamp: #4c2fb8;
+  --stamp-ink: #ffffff;
+  --stamp-tint: #ece8fb;
+  --ok: #0b7a4b;
+  --ok-tint: #e3f4ec;
+  --warn: #9a5700;
+  --warn-tint: #fbf0de;
+  --stop: #b3261e;
+  --stop-tint: #fbe7e5;
+  --focus: #4c2fb8;
+
+  /* type */
+  --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Mukta", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-sm: 0.9rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.6rem;
+  --text-2xl: clamp(1.8rem, 4vw, 2.6rem);
+
+  /* shape and space */
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 2px rgb(22 35 63 / 0.06), 0 4px 16px rgb(22 35 63 / 0.06);
+  --gutter: 16px;
+
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.5;
+  color: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0e1423;
+    --surface: #161f34;
+    --surface-sunk: #1d2840;
+    --ink: #e6ebf5;
+    --ink-soft: #a6b1c8;
+    --line: #2c3854;
+    --stamp: #a895ff;
+    --stamp-ink: #160f33;
+    --stamp-tint: #2a2350;
+    --ok: #4fd39a;
+    --ok-tint: #12352a;
+    --warn: #f2b45a;
+    --warn-tint: #3a2a12;
+    --stop: #ff8a80;
+    --stop-tint: #3d1a1a;
+    --focus: #a895ff;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0e1423;
+  --surface: #161f34;
+  --surface-sunk: #1d2840;
+  --ink: #e6ebf5;
+  --ink-soft: #a6b1c8;
+  --line: #2c3854;
+  --stamp: #a895ff;
+  --stamp-ink: #160f33;
+  --stamp-tint: #2a2350;
+  --ok: #4fd39a;
+  --ok-tint: #12352a;
+  --warn: #f2b45a;
+  --warn-tint: #3a2a12;
+  --stop: #ff8a80;
+  --stop-tint: #3d1a1a;
+  --focus: #a895ff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25);
 }
 
 body {
   margin: 0;
-  padding: 1rem;
+  background: var(--paper);
+  color: var(--ink);
   overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+:lang(hi) {
+  font-family: "Mukta", var(--font-body);
 }
 
 main {
   max-width: 72rem;
   margin: 0 auto;
+  padding: var(--gutter);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--stamp);
+  text-underline-offset: 0.18em;
+}
+
+code,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
 
 button,
 input,
 select {
-  font: inherit;
   min-height: 44px;
 }
 
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Buttons: one primary per screen, the rest quiet ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.6rem 1.15rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+
+.btn:hover {
+  border-color: var(--ink-soft);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-primary {
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: var(--stamp-ink);
+}
+
+.btn-primary:hover {
+  border-color: var(--ink);
+}
+
+.btn-ok {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--surface);
+}
+
+.btn-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.btn-stop {
+  border-color: var(--stop);
+  color: var(--stop);
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--stamp);
+  padding-inline: 0.5rem;
+}
+
+.btn-quiet:hover {
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+/* ---------- Surfaces ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.error {
+  color: var(--stop);
+  font-weight: 700;
+}
+
+/* Pill for a state or an outcome; the colour class says which. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.tone-ok { background: var(--ok-tint); color: var(--ok); }
+.tone-warn { background: var(--warn-tint); color: var(--warn); }
+.tone-stop { background: var(--stop-tint); color: var(--stop); }
+.tone-stamp { background: var(--stamp-tint); color: var(--stamp); }
+
+/* Honesty label (AGENTS.md rule 6): must stay readable, never decorative. */
 .honesty {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border: 2px solid currentColor;
-  border-radius: 4px;
-  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border: 2px dashed currentColor;
+  border-radius: 6px;
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+.loading {
+  padding: 2rem var(--gutter);
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- App shell (agent and operator pages; never on customer pages) ---------- */
+.shell-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.shell-inner {
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 0.5rem var(--gutter);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.brand small {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.shell-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-right: auto;
+}
+
+.shell-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.85rem;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.shell-nav a:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+.shell-nav a[aria-current="page"] {
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.shell-page {
+  max-width: 96rem;
+}
+
+/* ---------- Home ---------- */
+.home-hero {
+  padding: 2rem 0 1.5rem;
+  max-width: 46rem;
+}
+
+.home-hero h1 {
+  font-size: var(--text-2xl);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.home-hero p {
+  font-size: var(--text-lg);
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.home-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.home-task {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.home-task:hover {
+  border-color: var(--stamp);
+  transform: translateY(-2px);
+}
+
+.home-task h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--stamp);
+}
+
+.home-task p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.home-task .go {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.home-steps {
+  margin: 2.5rem 0 1rem;
+}
+
+.home-steps h2 {
+  font-size: var(--text-lg);
+  margin: 0 0 0.75rem;
+}
+
+.home-steps ol {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.4rem;
+  max-width: 46rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
+/* Lab capture: the device is in the volunteer's hands, so the page links go away. */
+body:has(main.lab[data-stage="capture"]) .shell-bar {
+  display: none;
+}
+
+/* Phones: brand and sign out on one row, the page links on the next. */
+@media (max-width: 640px) {
+  .shell-inner {
+    gap: 0.25rem 0.5rem;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .shell-inner > .btn-quiet {
+    margin-left: auto;
+  }
+
+  .shell-nav {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+    flex-wrap: nowrap;
+  }
+
+  .shell-nav a {
+    flex: 1;
+    justify-content: center;
+    padding: 0 0.4rem;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
 }

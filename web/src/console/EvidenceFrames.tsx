@@ -52,7 +52,7 @@ function Thumb({ sessionId, frame, passcode }: { sessionId: string; frame: Evide
   }, [sessionId, frame.idx, passcode]);
   return (
     <figure className="thumb">
-      {src ? <img src={src} alt={`Frame ${frame.idx}, ${frame.label}`} /> : <div className="thumb-empty">{failed ? "not available" : "…"}</div>}
+      {src ? <img src={src} alt={`Frame ${frame.idx}, ${frame.label}`} /> : <div className="thumb-empty">{failed ? "Not available" : "Loading…"}</div>}
       <figcaption>
         {frame.label} · frame {frame.idx}
       </figcaption>
@@ -65,7 +65,8 @@ export function EvidenceFrames({ report, passcode }: { report: SessionReport; pa
   if (!frames.length) return null;
   return (
     <section className="evidence" aria-label="Evidence frames">
-      <h3>Evidence frames</h3>
+      <h3>Camera frames</h3>
+      <p className="muted">Snapshots from when the screen changed colour and from the middle of the head turn.</p>
       <div className="thumbs">
         {frames.map((f) => (
           <Thumb key={`${f.label}-${f.idx}`} sessionId={report.session_id} frame={f} passcode={passcode} />

@@ -1,10 +1,21 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { createSession, postAgentDecision } from "../api/client";
+import type { AgentAction, AgentDecision, Outcome, Product } from "../contracts";
 import { CustomerLink, customerLink } from "./NewSession";
-import type { AgentAction, AgentDecision, Product } from "../contracts";
 
+const ACTIONS: AgentAction[] = ["approve", "reverify", "escalate"];
 const LABEL: Record<AgentAction, string> = { approve: "Approve", reverify: "Re-verify", escalate: "Escalate to fraud" };
 const DONE: Record<AgentAction, string> = { approve: "Approved", reverify: "Re-verification requested", escalate: "Escalated to fraud" };
+const WHAT: Record<AgentAction, string> = {
+  approve: "The customer is genuine. Continue the KYC.",
+  reverify: "Send the customer a new link to try again.",
+  escalate: "Pass this customer to the fraud team.",
+};
+const BUTTON: Record<AgentAction, string> = { approve: "btn-ok", reverify: "btn-warn", escalate: "btn-stop" };
+
+/** The button that matches the recommendation. HUMAN_REVIEW has none: the agent must look first. */
+const SUGGESTED: Partial<Record<Outcome, AgentAction>> = { PASS: "approve", RETRY_STEP_UP: "reverify" };
 
 interface Props {
   sessionId: string;
@@ -13,60 +24,124 @@ interface Props {
   hasDecision: boolean;
   recorded: AgentDecision | null;
   onRecorded: () => void;
+  /** the recommendation, to highlight the matching button */
+  outcome?: Outcome | null;
 }
 
 /** The agent's call. Re-verify also creates the next attempt and shows its customer link. */
-export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded }: Props) {
+export function AgentActions({ sessionId, product, passcode, hasDecision, recorded, onRecorded, outcome }: Props) {
+  const id = useId();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(null);
+  const [next, setNext] = useState<{ url: string; sessionId: string | null } | null>(null);
   const [at, setAt] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const escalateRef = useRef<HTMLButtonElement>(null);
+  const suggested = outcome ? SUGGESTED[outcome] : undefined;
+
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus();
+  }, [confirming]);
 
   const act = async (action: AgentAction) => {
     setBusy(true);
     setError(null);
+    setConfirming(false);
     try {
       await postAgentDecision(sessionId, passcode, { action, note });
       setAt(new Date().toLocaleTimeString());
       if (action === "reverify") {
-        const next = await createSession({ product, previous_session_id: sessionId });
-        setLink(customerLink(window.location.origin, next.customer_url));
+        const created = await createSession({ product, previous_session_id: sessionId });
+        setNext({ url: customerLink(window.location.origin, created.customer_url), sessionId: created.session_id ?? null });
       }
       onRecorded();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(`Your decision was not saved: ${e instanceof Error ? e.message : String(e)}. Please try again.`);
     } finally {
       setBusy(false);
     }
   };
 
+  const cancel = () => {
+    setConfirming(false);
+    escalateRef.current?.focus();
+  };
+
   return (
-    <section className="actions" aria-label="Agent actions">
-      <h3>Agent decision</h3>
-      {recorded && (
+    <section className="decide actions card" aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`}>Your decision</h2>
+      {recorded ? (
         <p className="recorded" role="status">
           {DONE[recorded.action]}
           {at ? ` at ${at}` : ""}
           {recorded.note ? `: "${recorded.note}"` : ""}
         </p>
+      ) : (
+        <p className="decide-hint">
+          {!hasDecision
+            ? "You can decide once the analysis has finished."
+            : suggested
+              ? `PulseLens suggests ${LABEL[suggested]}. You make the final call.`
+              : "Review carefully, ask questions, then choose."}
+        </p>
       )}
-      <label>
-        Note
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-      </label>
-      <div className="buttons">
-        {(Object.keys(LABEL) as AgentAction[]).map((a) => (
-          <button key={a} type="button" className={`action-${a}`} disabled={!hasDecision || busy} onClick={() => void act(a)}>
-            {LABEL[a]}
-          </button>
-        ))}
+
+      <div className="note-field">
+        <label htmlFor={`${id}-note`}>Note</label>
+        <span id={`${id}-note-hint`} className="muted">
+          Optional, saved with your decision.
+        </span>
+        <textarea id={`${id}-note`} aria-describedby={`${id}-note-hint`} value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
       </div>
-      {!hasDecision && <p className="muted">Actions open when the analysis has finished.</p>}
-      {link && (
-        <div>
-          New attempt for the customer:
-          <CustomerLink url={link} />
+
+      <ul className="choices">
+        {ACTIONS.map((a) => {
+          const isSuggested = hasDecision && a === suggested;
+          return (
+            <li key={a} className={`choice${isSuggested ? " is-suggested" : ""}`}>
+              <button ref={a === "escalate" ? escalateRef : undefined} type="button"
+                className={`btn ${BUTTON[a]} choice-btn action-${a}`} disabled={!hasDecision || busy || confirming}
+                aria-describedby={`${id}-${a}`} onClick={() => (a === "escalate" ? setConfirming(true) : void act(a))}>
+                {LABEL[a]}
+              </button>
+              <p id={`${id}-${a}`} className="choice-what">
+                {isSuggested && <span className="chip tone-stamp">Suggested</span>} {WHAT[a]}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+
+      {confirming && (
+        <div className="confirm" role="group" aria-labelledby={`${id}-confirm`}>
+          <p id={`${id}-confirm`}>
+            <strong>Escalate this customer to the fraud team?</strong>
+          </p>
+          <div className="confirm-buttons">
+            <button ref={confirmRef} type="button" className="btn btn-stop" disabled={busy} onClick={() => void act("escalate")}>
+              Confirm
+            </button>
+            <button type="button" className="btn btn-quiet" onClick={cancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {next && (
+        <div className="next-attempt">
+          <h3>New link for the customer</h3>
+          <p className="muted">Share this link or QR code with the customer on the call.</p>
+          <CustomerLink url={next.url} />
+          {next.sessionId && (
+            <p>
+              <Link to={`/console/${next.sessionId}`} className="btn btn-primary">
+                Watch the new attempt
+              </Link>
+            </p>
+          )}
         </div>
       )}
       {error && (
