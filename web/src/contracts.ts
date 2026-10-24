@@ -102,7 +102,24 @@ export interface PulseHoldStep {
   duration_ms: number; // positive
 }
 
-export type Step = ColourStep | TurnStep;
+/** A nod prompt (head down, then back up), after the turn. Behind config challenge.extra_prompts. */
+export interface NodStep {
+  kind: "nod";
+  step_id: string; // "n0"
+  start_offset_ms: number;
+  duration_ms: number;
+}
+
+/** One random digit on screen, to be read aloud. Video only: no audio is captured; the analysis times the lips. */
+export interface DigitStep {
+  kind: "digit";
+  step_id: string; // "d0", "d1", "d2"
+  digit: number; // 0..9
+  start_offset_ms: number;
+  duration_ms: number;
+}
+
+export type Step = ColourStep | TurnStep | NodStep | DigitStep;
 
 export interface Challenge {
   session_id: string;

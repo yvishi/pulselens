@@ -177,7 +177,26 @@ class PulseHoldStep(Model):
     duration_ms: int = Field(gt=0)
 
 
-Step = Annotated[ColourStep | TurnStep, Field(discriminator="kind")]
+class NodStep(Model):
+    """A nod prompt (head down, then back up), after the turn. Behind config challenge.extra_prompts."""
+
+    kind: Literal["nod"] = "nod"
+    step_id: str                     # "n0"
+    start_offset_ms: int
+    duration_ms: int
+
+
+class DigitStep(Model):
+    """One random digit on screen, to be read aloud. Video only: no audio is captured; the analysis times the lips."""
+
+    kind: Literal["digit"] = "digit"
+    step_id: str                     # "d0", "d1", "d2"
+    digit: int = Field(ge=0, le=9)
+    start_offset_ms: int
+    duration_ms: int
+
+
+Step = Annotated[ColourStep | TurnStep | NodStep | DigitStep, Field(discriminator="kind")]
 
 
 class Challenge(Model):
@@ -298,7 +317,12 @@ Keshav writes it by hand at K1, field for field, same names (snake_case). Mappin
 - `X | None` becomes `X | null`.
 - `tuple[...]` becomes a TS tuple.
 - `dict[str, T]` becomes `Record<string, T>`.
-- `Step` becomes `ColourStep | TurnStep`.
+- `Step` becomes `ColourStep | TurnStep | NodStep | DigitStep`.
+
+The nod and digit steps (additive) come after the turn when `config.yaml` `challenge.extra_prompts` is true: a nod
+(`n0`, 2.5 s, 1 s after the turn), then 3 distinct random digits (`d0`..`d2`), each on screen 1.2 s, the first 1 s
+after the nod, then random gaps of 0.5-1.0 s. The browser reports each with a `ChallengeEvent` like a turn step
+(`shown`, painted/ended, `shown_rgb` null). Sessions without them analyse exactly as before.
 
 A pytest (`server/tests/engine/test_contract_mirror.py`) parses `contracts.ts` and fails if a model or field name in `contracts.py` is missing from it.
 
@@ -415,13 +439,14 @@ Input: all `CheckResult`s (integrity + analysis) and the `Plan`.
    | 1 | any result with `status == "protocol_error"` | `HUMAN_REVIEW` | — | `fusion.integrity_violation` |
    | 2 | 2 or more of B, C, D are `flag` | `HUMAN_REVIEW` | — | `fusion.two_families` |
    | 3 | exactly 1 of B, C, D is `flag` | `RETRY_STEP_UP` | `fresh_challenge`; `agent_checks` if mode is `NO_FLASH` or `attempt >= 2` | `fusion.one_family` |
-   | 4 | the turn prompt was shown and `turn.follow` abstained with `turn.not_performed` | `RETRY_STEP_UP` | `fresh_challenge`; `agent_checks` if `attempt >= 2` | `fusion.challenge_not_done` |
+   | 4 | a live prompt was shown and not followed: `turn.follow` abstained with `turn.not_performed`, `turn.nod` with `turn.nod_not_performed` or `visual.lip_digits` with `visual.digits_not_performed` | `RETRY_STEP_UP` | `fresh_challenge`; `agent_checks` if `attempt >= 2` | `fusion.challenge_not_done` |
    | 5 | fewer than 2 of B, C, D have a usable voting result | `RETRY_STEP_UP` | `no_flash` if C abstained with a `quality.*` light reason and mode is not `NO_FLASH`; else `agent_checks`; `assisted_kyc` if `attempt >= 3` | `fusion.low_coverage` |
    | 6 | the live challenge is not verified: no usable, unflagged `turn.follow` when the plan runs the turn (else no usable, unflagged `light.response`) | `RETRY_STEP_UP` | as row 5 | `fusion.liveness_not_shown` |
    | 7 | otherwise | `PASS` | — | `fusion.pass` |
 
    Rows 4 and 6 (S2): liveness must be shown, not just not disproved. A YouTube face replayed to the camera
-   passed the old table with no flag, because every check that could catch it abstained.
+   passed the old table with no flag, because every check that could catch it abstained. Row 6 still needs only the
+   turn (or the light): the nod and the digits are not required for PASS until real sessions have measured them.
 
 6. `Decision.provisional` is true if any usable result has `threshold_source == "provisional"`. The console then shows the label **PROVISIONAL THRESHOLDS**.
 
@@ -447,3 +472,5 @@ These rules are table-driven tests in K6. Changing them is a contract change.
 | `turn.identity` | D | `D.identity` | Ganeev | same face through the turn |
 | `visual.sbi` | D | `D.detector` | Ganeev | SBI detector score, one feature |
 | `pulse.coherence` | A | `A.pulse` | Ganeev | logged only; `flag` is always false |
+| `turn.nod` | D | `D.nod` | Ganeev | pitch excursion after the nod prompt; usable risk 0 or abstain (never flags yet) |
+| `visual.lip_digits` | D | `D.lips` | Ganeev | lips open in time with the random digits (timing only: no audio, digit not recognised); usable risk 0 or abstain |

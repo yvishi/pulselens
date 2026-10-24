@@ -11,6 +11,15 @@ challenge:
   capable:     {colour_steps: 6, dwell_ms: 400, gap_ms: [700, 1300], turn_ms: 3000}
   constrained: {colour_steps: 4, dwell_ms: 700, gap_ms: [1000, 1600], turn_ms: 3500}
   no_flash:    {turn_ms: 3500}
+  # Two more live prompts after the turn, in every mode (they need no flash): a nod, then 3 random digits read aloud
+  # one at a time (video only: no audio; the analysis times the lips). false = the challenge is exactly as before.
+  extra_prompts: true
+  nod_gap_ms: 1000             # after the turn, before the nod prompt: the head is back from the turn
+  nod_ms: 2500
+  digit_count: 3
+  digit_first_gap_ms: 1000     # after the nod, before the first digit
+  digit_ms: 1200               # each digit on screen
+  digit_gap_ms: [500, 1000]    # random gap between digits
 capture:
   desktop_size: [640, 480]
   mobile_size: [480, 360]

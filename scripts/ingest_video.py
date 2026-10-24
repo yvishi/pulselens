@@ -27,9 +27,11 @@ from pulselens.config import get_settings, load_config  # noqa: E402
 from pulselens.contracts import (  # noqa: E402
     ChallengeEvent,
     ColourStep,
+    DigitStep,
     FrameBatchMeta,
     FrameMeta,
     Label,
+    NodStep,
     Preflight,
     TurnStep,
 )
@@ -138,7 +140,7 @@ def ingest_video(
                     shown_rgb=(r, g, b),
                 )
             )
-        elif isinstance(s, TurnStep):
+        elif isinstance(s, TurnStep | NodStep | DigitStep):  # every prompt "shown" on schedule
             events.append(
                 ChallengeEvent(
                     step_id=s.step_id,

@@ -38,10 +38,17 @@ export function Timeline({ challenge, events }: { challenge: Challenge | null; e
                 // The step's own hue: data, not decoration.
                 <span key={s.step_id} className="step colour" title={`${s.step_id}: colour, hue ${s.hue_deg}°`}
                   style={{ left: pct(start, total), width: pct(length, total), background: `hsl(${s.hue_deg} 70% 60%)` }} />
-              ) : (
+              ) : s.kind === "turn" ? (
                 <span key={s.step_id} className="step turn" title={`${s.step_id}: turn ${s.direction}`}
                   style={{ left: pct(start, total), width: pct(length, total) }}>
                   <span aria-hidden="true">{s.direction === "left" ? "←" : "→"}</span>
+                </span>
+              ) : (
+                // The nod and the digits read aloud (challenge.extra_prompts) share the turn's lane style.
+                <span key={s.step_id} className="step turn"
+                  title={s.kind === "nod" ? `${s.step_id}: nod` : `${s.step_id}: say ${s.digit}`}
+                  style={{ left: pct(start, total), width: pct(length, total) }}>
+                  <span aria-hidden="true">{s.kind === "nod" ? "↕" : s.digit}</span>
                 </span>
               );
             })}

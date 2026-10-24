@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, TurnStep
+from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, DigitStep, NodStep, TurnStep
 
 
 @dataclass(frozen=True)
@@ -19,10 +19,11 @@ class StepWindow:
 
 
 def step_window(
-    ch: Challenge, step: ColourStep | TurnStep, event: ChallengeEvent | None, *, tail_ms: float = 0
+    ch: Challenge, step: ColourStep | TurnStep | NodStep | DigitStep, event: ChallengeEvent | None, *,
+    tail_ms: float = 0,
 ) -> StepWindow:
     is_turn = isinstance(step, TurnStep)
-    length = step.duration_ms if isinstance(step, TurnStep) else step.dwell_ms
+    length = step.dwell_ms if isinstance(step, ColourStep) else step.duration_ms
     tail = tail_ms if is_turn else 0
     if event is not None and event.status == "shown" and event.painted_t_ms is not None:
         end = event.ended_t_ms if event.ended_t_ms is not None else event.painted_t_ms + length

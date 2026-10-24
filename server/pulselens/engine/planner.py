@@ -10,7 +10,7 @@ import hashlib
 import random
 from typing import Any
 
-from pulselens.contracts import Challenge, ColourStep, Plan, Preflight, TurnStep
+from pulselens.contracts import Challenge, ColourStep, DigitStep, NodStep, Plan, Preflight, TurnStep
 
 # Every reason code plan_session can emit (each has a sentence in reason_text.py).
 MODE_REASONS = (
@@ -68,7 +68,7 @@ def rng_for_nonce(nonce: str) -> random.Random:
 def make_challenge(plan: Plan, session_id: str, nonce: str, rng: random.Random, cfg: dict[str, Any]) -> Challenge:
     c = cfg["challenge"]
     mode_cfg = c[plan.mode.lower()]
-    steps: list[ColourStep | TurnStep] = []
+    steps: list[ColourStep | TurnStep | NodStep | DigitStep] = []
     end = 0  # end of the last step, ms after the baseline
 
     if plan.run_light and plan.mode != "NO_FLASH":
@@ -87,6 +87,19 @@ def make_challenge(plan: Plan, session_id: str, nonce: str, rng: random.Random, 
         steps.append(TurnStep(step_id="t0", direction=rng.choice(["left", "right"]), start_offset_ms=start,
                               duration_ms=duration))
         end = start + duration
+
+    if c.get("extra_prompts", False):
+        # After the turn, in every mode: a nod, then random digits read aloud one at a time at random gaps. Drawn
+        # after the colours and the turn, so those stay exactly what the same nonce gave before.
+        start = end + int(c["nod_gap_ms"]) if steps else 0
+        steps.append(NodStep(step_id="n0", start_offset_ms=start, duration_ms=int(c["nod_ms"])))
+        end = start + int(c["nod_ms"])
+        gap_lo, gap_hi = c["digit_gap_ms"]
+        digit_ms = int(c["digit_ms"])
+        for k, digit in enumerate(rng.sample(range(10), int(c["digit_count"]))):  # distinct: a change is visible
+            start = end + (int(c["digit_first_gap_ms"]) if k == 0 else rng.randint(int(gap_lo), int(gap_hi)))
+            steps.append(DigitStep(step_id=f"d{k}", digit=digit, start_offset_ms=start, duration_ms=digit_ms))
+            end = start + digit_ms
 
     return Challenge(session_id=session_id, nonce=nonce, mode=plan.mode, baseline_ms=int(c["baseline_ms"]),
                      steps=steps, total_ms=end + TAIL_MS)

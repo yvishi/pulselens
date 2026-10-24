@@ -116,7 +116,26 @@ class PulseHoldStep(Model):
     duration_ms: int = Field(gt=0)
 
 
-Step = Annotated[ColourStep | TurnStep, Field(discriminator="kind")]
+class NodStep(Model):
+    """A nod prompt (head down, then back up), after the turn. Behind config challenge.extra_prompts."""
+
+    kind: Literal["nod"] = "nod"
+    step_id: str                     # "n0"
+    start_offset_ms: int
+    duration_ms: int
+
+
+class DigitStep(Model):
+    """One random digit on screen, to be read aloud. Video only: no audio is captured; the analysis times the lips."""
+
+    kind: Literal["digit"] = "digit"
+    step_id: str                     # "d0", "d1", "d2"
+    digit: int = Field(ge=0, le=9)
+    start_offset_ms: int
+    duration_ms: int
+
+
+Step = Annotated[ColourStep | TurnStep | NodStep | DigitStep, Field(discriminator="kind")]
 
 
 class Challenge(Model):

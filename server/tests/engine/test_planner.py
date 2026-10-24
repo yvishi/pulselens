@@ -8,7 +8,7 @@ import secrets
 import pytest
 
 from pulselens.config import load_config
-from pulselens.contracts import ColourStep, Plan, Preflight, TurnStep
+from pulselens.contracts import ColourStep, DigitStep, NodStep, Plan, Preflight, TurnStep
 from pulselens.engine.planner import MODE_REASONS, make_challenge, plan_session, rng_for_nonce
 from pulselens.engine.reason_text import REASON_TEXT
 
@@ -115,7 +115,7 @@ def test_challenge_safety(mode: str) -> None:
 def test_turn_starts_after_the_gap_or_at_zero() -> None:
     ch = make_challenge(_plan("CAPABLE"), "s1", "n", rng_for_nonce("n"), CFG)
     last_colour = [s for s in ch.steps if isinstance(s, ColourStep)][-1]
-    turn = ch.steps[-1]
+    turn = next(s for s in ch.steps if isinstance(s, TurnStep))
     assert turn.start_offset_ms == last_colour.start_offset_ms + last_colour.dwell_ms + CFG["challenge"]["turn_gap_ms"]
     no_flash = make_challenge(_plan("NO_FLASH"), "s1", "n", rng_for_nonce("n"), CFG)
     assert no_flash.steps[0].start_offset_ms == 0
@@ -132,3 +132,41 @@ def test_challenge_random_per_nonce() -> None:
     a = make_challenge(_plan("CAPABLE"), "s1", nonce, rng_for_nonce(nonce), CFG)
     b = make_challenge(_plan("CAPABLE"), "s1", nonce, rng_for_nonce(nonce), CFG)
     assert a == b
+
+
+@pytest.mark.parametrize("mode", ["CAPABLE", "CONSTRAINED", "NO_FLASH"])
+def test_extra_prompts_follow_the_turn_in_every_mode(mode: str) -> None:
+    c = CFG["challenge"]
+    assert c["extra_prompts"] is True
+    for seed in range(100):
+        ch = make_challenge(_plan(mode), "s1", f"nonce-{seed}", rng_for_nonce(f"nonce-{seed}"), CFG)
+        turn = next(s for s in ch.steps if isinstance(s, TurnStep))
+        nod, digits = ch.steps[-4], ch.steps[-3:]
+        assert isinstance(nod, NodStep) and nod.step_id == "n0" and nod.duration_ms == c["nod_ms"]
+        assert nod.start_offset_ms == turn.start_offset_ms + turn.duration_ms + c["nod_gap_ms"]
+        assert all(isinstance(d, DigitStep) for d in digits) and [d.step_id for d in digits] == ["d0", "d1", "d2"]
+        assert len({d.digit for d in digits}) == 3 and all(0 <= d.digit <= 9 for d in digits)
+        assert digits[0].start_offset_ms == nod.start_offset_ms + nod.duration_ms + c["digit_first_gap_ms"]
+        lo, hi = c["digit_gap_ms"]
+        for a, b in zip(digits, digits[1:], strict=False):
+            assert lo <= b.start_offset_ms - (a.start_offset_ms + a.duration_ms) <= hi
+        assert ch.total_ms == digits[-1].start_offset_ms + digits[-1].duration_ms + 1500
+
+
+def test_extra_prompts_off_is_the_challenge_from_before() -> None:
+    off = {**CFG, "challenge": {**CFG["challenge"], "extra_prompts": False}}
+    for seed in range(50):
+        nonce = f"nonce-{seed}"
+        on_ch = make_challenge(_plan("CAPABLE"), "s1", nonce, rng_for_nonce(nonce), CFG)
+        off_ch = make_challenge(_plan("CAPABLE"), "s1", nonce, rng_for_nonce(nonce), off)
+        assert not any(isinstance(s, NodStep | DigitStep) for s in off_ch.steps)
+        assert off_ch.steps == on_ch.steps[: len(off_ch.steps)]  # the colours and the turn are the same draws
+        assert off_ch.total_ms == off_ch.steps[-1].start_offset_ms + off_ch.steps[-1].duration_ms + 1500
+
+
+def test_digits_are_unpredictable_per_nonce() -> None:
+    def digits(nonce: str) -> list[int]:
+        ch = make_challenge(_plan("NO_FLASH"), "s1", nonce, rng_for_nonce(nonce), CFG)
+        return [s.digit for s in ch.steps if isinstance(s, DigitStep)]
+
+    assert sum(digits(secrets.token_hex(16)) != digits(secrets.token_hex(16)) for _ in range(100)) >= 95
