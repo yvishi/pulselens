@@ -46,12 +46,13 @@ def test_a_slow_switch_to_the_unusual_mode_is_not_too_perfect(synth) -> None:
     assert r.risk == 0 and not r.flag
 
 
-def test_settings_that_change_while_the_frames_do_not_are_a_phantom_switch(synth) -> None:
-    # Synthetic sessions run at 320x240: the camera accepted 1280x720, but 320x240 frames kept coming.
+def test_a_phantom_switch_is_noted_not_scored(synth) -> None:
+    # Synthetic sessions run at 320x240: the camera accepted 1280x720, but 320x240 frames kept coming. S2: a real
+    # webcam can take over the probe's 1 s to switch, so this is noted only.
     r = _run(synth, [_row(HD, delivered=(320, 240), switch_ms=None, frames_missing=None),
                      _row(ODD, accepted=False)])
-    assert r.risk == 1.0 and r.flag and r.reason_codes == ["sensor.phantom_switch"]
-    assert "1280x720" in r.explanation
+    assert r.risk == 0.0 and not r.flag and r.reason_codes == ["sensor.phantom_switch"]
+    assert "1280x720" in r.explanation and "not scored" in r.explanation
 
 
 @pytest.mark.parametrize("rows", [[], [_row(HD, accepted=False), _row(VGA, accepted=False), _row(ODD, accepted=False)]])

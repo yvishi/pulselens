@@ -5,8 +5,10 @@ Each row asks for an exact size (resizeMode "none"): refused (accepted false; al
 or accepted with the size actually delivered, the time to the first frame at the new size (null: none within 1 s)
 and the frames missing during the switch. A real sensor refuses odd modes or reconfigures slowly and loses frames;
 software rescales anything at once.
-- Phantom switch, risk 1 (`sensor.phantom_switch`, ported rule): a mode was accepted, but no frame of the new size
-  arrived and the video stayed at the working size. Settings that change while the frames do not.
+- Phantom switch, noted, not scored (`sensor.phantom_switch`, ported rule): a mode was accepted, but no frame of the
+  new size arrived within the probe's 1 s and the video stayed at the working size. S2: 15 real sessions on one
+  webcam switched in 616-967 ms (slowest in dim light) and one genuine 1280x720 switch missed the window, so a slow
+  real camera and a fake switch look the same here. Scored again only if the probe waits longer (Yash's probe.ts).
 - Too perfect, risk 0.7 (`sensor.probe_too_perfect`): the unusual 1000x750 mode was accepted, delivered at that
   size within 150 ms and with no missing frame. The old repo measured exactly this on Chromium's fake camera, while
   a real webcam refused the mode. **A hypothesis for OBS and other virtual cameras: measure it at S2.**
@@ -61,9 +63,9 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     w, h = unusual_size
     if phantom:
         sizes = ", ".join(f"{r.requested[0]}x{r.requested[1]}" for r in phantom)
-        risk, reasons = 1.0, ["sensor.phantom_switch"]
-        explanation = (f"The camera accepted {sizes} but kept sending {working[0]}x{working[1]} frames: settings "
-                       "that change while the video does not.")
+        risk, reasons = 0.0, ["sensor.phantom_switch"]
+        explanation = (f"The camera accepted {sizes} but sent no frame of that size within 1 s (still "
+                       f"{working[0]}x{working[1]}); noted, not scored: a real camera can take that long to switch.")
     elif too_perfect:
         risk, reasons = 0.7, ["sensor.probe_too_perfect"]
         explanation = (f"The camera accepted the unusual {w}x{h} mode and switched in {unusual.switch_ms:.0f} ms "
