@@ -25,6 +25,7 @@ from pulselens.contracts import (
     SessionState,
     SessionSummary,
 )
+from pulselens.engine import audit
 from pulselens.engine.auth import TokenSigner
 
 Clock = Callable[[], float]  # wall-clock milliseconds
@@ -88,6 +89,7 @@ class SessionStore:
         (folder / "frames").mkdir(parents=True)
         with self.lock(session_id):
             self._write_json(folder / "session.json", session)
+            audit.append(folder, "session.created", session)
         token = self.signer.customer_token(session_id)
         return SessionCreated(
             session_id=session_id,
@@ -203,11 +205,16 @@ class SessionStore:
                 lines.append({**frame.model_dump(), "batch_seq": meta.batch_seq, "received_at_ms": received})
             with (folder / "frames.jsonl").open("a", encoding="utf-8") as f:
                 f.writelines(json.dumps(line) + "\n" for line in lines)
+            audit.append(folder, "frames.batch", b"".join(jpegs) + meta.model_dump_json().encode())
             return True
 
     def append_events(self, session_id: str, events: list[ChallengeEvent]) -> None:
-        with self.lock(session_id), (self.path(session_id) / "events.jsonl").open("a", encoding="utf-8") as f:
-            f.writelines(e.model_dump_json() + "\n" for e in events)
+        text = "".join(e.model_dump_json() + "\n" for e in events)
+        folder = self.path(session_id)
+        with self.lock(session_id):
+            with (folder / "events.jsonl").open("a", encoding="utf-8") as f:
+                f.write(text)
+            audit.append(folder, "events.received", text.encode())
 
     # --- listing ---
 

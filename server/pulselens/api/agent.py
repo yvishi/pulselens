@@ -14,6 +14,7 @@ from pydantic import TypeAdapter, ValidationError
 from pulselens.api.common import session_or_404, store
 from pulselens.bundle import frame_name, load_bundle
 from pulselens.contracts import AgentDecision, CheckResult, Decision, SessionReport, SessionSummary
+from pulselens.engine import audit
 from pulselens.engine.auth import passcode_ok
 
 router = APIRouter(prefix="/api")
@@ -79,5 +80,7 @@ def agent_decision(request: Request, session_id: str, body: AgentDecision,
     s = store(request)
     if not s.has(session_id, "decision"):
         raise HTTPException(409, "no_decision_yet")
-    s.save_model(session_id, "agent", body)
+    with s.lock(session_id):
+        s.save_model(session_id, "agent", body)
+        audit.append(s.path(session_id), "agent.action", body.model_dump(mode="json"))
     return Response(status_code=204)

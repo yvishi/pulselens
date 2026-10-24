@@ -16,7 +16,7 @@ from pathlib import Path
 
 from pulselens.bundle import load_bundle
 from pulselens.contracts import CheckResult, Decision
-from pulselens.engine import fake_analysis
+from pulselens.engine import audit, fake_analysis
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
 from pulselens.engine.results import abstain
@@ -72,9 +72,10 @@ def run_analysis(session_dir: Path, store: SessionStore, *, pool: Executor, fake
     results = integrity + _analyze_with_timeout(analyze or choose_analyze(fake), session_dir, timeout_s, pool)
     decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)))
     with store.lock(session_id):
-        (session_dir / "results.json").write_text(
-            json.dumps([r.model_dump(mode="json") for r in results]), encoding="utf-8"
-        )
+        results_json = json.dumps([r.model_dump(mode="json") for r in results])
+        (session_dir / "results.json").write_text(results_json, encoding="utf-8")
         (session_dir / "decision.json").write_text(decision.model_dump_json(), encoding="utf-8")
+        audit.append(session_dir, "analysis.done", results_json.encode())
+        audit.append(session_dir, "decision.made", decision.model_dump(mode="json"))
     store.set_state(session_id, "done")
     return decision
