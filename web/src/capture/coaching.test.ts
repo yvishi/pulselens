@@ -66,6 +66,16 @@ describe("coaching measurements", () => {
     expect(r.outside).toBeCloseTo(200, 5);
   });
 
+  it("lumaInOut uses the same Rec.709 luma as quality.ts", () => {
+    const w = 4;
+    const h = 4;
+    const d = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) d.set(x < 2 ? [255, 0, 0, 255] : [0, 0, 255, 255], (y * w + x) * 4);
+    const r = lumaInOut(d, w, h, [0, 0, 0.5, 1]);
+    expect(r.inside).toBeCloseTo(0.2126 * 255, 5);
+    expect(r.outside).toBeCloseTo(0.0722 * 255, 5);
+  });
+
   it("summarise takes medians; the blur baseline comes from samples in the first second", () => {
     const s = (t: number, blur: number, face: CoachSample["face"]): CoachSample => ({
       t, brightness: 100, blur, face, faceLuma: face ? 110 : null, outsideLuma: 90,

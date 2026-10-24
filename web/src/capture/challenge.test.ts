@@ -22,8 +22,10 @@ function challenge(steps: Step[], baseline_ms = 1000): Challenge {
   return { session_id: "s", nonce: "n", mode: "CAPABLE", baseline_ms, steps, total_ms: 10_000 };
 }
 
-async function run(ch: Challenge, skip: () => string | null = () => null, overlay = fakeOverlay()) {
+async function run(ch: Challenge, skip: () => string | null = () => null, overlay = fakeOverlay(), setupMs = 0) {
   const t0 = now();
+  // Setup between t0 and runChallenge (overlay, uploader, grabber start): it must not shift the schedule.
+  if (setupMs) await vi.advanceTimersByTimeAsync(setupMs);
   const showTurnPrompt = vi.fn(async (_dir: "left" | "right", ms: number) => {
     const painted = now() - t0;
     await new Promise((r) => setTimeout(r, ms));
@@ -57,6 +59,25 @@ describe("runChallenge", () => {
     expect(events![0]!.shown_rgb).toHaveLength(3);
     expect(events![2]!.shown_rgb).toBeNull();
     expect(showTurnPrompt).toHaveBeenCalledWith("left", 1500);
+  });
+
+  it("schedules steps from t0: a 300 ms setup delay does not shift them (matches the server's step_window)", async () => {
+    const { events } = await run(challenge(steps), () => null, fakeOverlay(), 300);
+    events!.forEach((e, k) => {
+      const scheduled = 1000 + steps[k]!.start_offset_ms; // baseline_ms + start_offset_ms, ms since t0
+      expect(e.painted_t_ms!).toBeGreaterThanOrEqual(scheduled);
+      expect(e.painted_t_ms!).toBeLessThan(scheduled + 50); // one 16 ms frame, not the 300 ms setup
+    });
+  });
+
+  it("a setup longer than the baseline starts the first step at once, never before t0 + its slot", async () => {
+    const { events } = await run(challenge([colour("c0", 40, 0), colour("c1", 200, 1000)], 200), () => null,
+      fakeOverlay(), 300);
+    expect(events!.map((e) => e.status)).toEqual(["shown", "shown"]);
+    expect(events![0]!.painted_t_ms!).toBeGreaterThanOrEqual(300);
+    expect(events![0]!.painted_t_ms!).toBeLessThan(350);
+    expect(events![1]!.painted_t_ms!).toBeGreaterThanOrEqual(1200);
+    expect(events![1]!.painted_t_ms!).toBeLessThan(1250);
   });
 
   it("holds each colour for at least its dwell", async () => {

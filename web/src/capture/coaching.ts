@@ -5,7 +5,7 @@
  */
 import { now } from "./clock";
 import { createFaceTracker, type FaceTracker } from "./face";
-import { QUALITY_SIZE, laplacianVariance, meanLuma, median } from "./quality";
+import { QUALITY_SIZE, laplacianVariance, luma, meanLuma, median } from "./quality";
 
 export type CoachTip = "light" | "backlight" | "closer" | "shoulders" | "still";
 
@@ -79,7 +79,7 @@ export function lumaInOut(d: Uint8ClampedArray, w: number, h: number, box: Box):
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const k = (y * w + x) * 4;
-      const v = 0.299 * d[k]! + 0.587 * d[k + 1]! + 0.114 * d[k + 2]!;
+      const v = luma(d, k);
       total += v;
       if (x >= x0 && x < x1 && y >= y0 && y < y1) {
         inSum += v;
