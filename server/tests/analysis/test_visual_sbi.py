@@ -8,6 +8,7 @@ import pytest
 
 from pulselens.analysis.checks import visual_sbi
 from pulselens.analysis.checks.sensor_regions import still_frames
+from pulselens.analysis.thresholds import PROVISIONAL, Thresholds, _read
 from pulselens.analysis.vision import sbi
 
 HAS_TORCH = all(importlib.util.find_spec(m) for m in ("torch", "efficientnet_pytorch"))
@@ -52,11 +53,14 @@ def test_scores_shape_and_input_with_a_fake_model(synth, monkeypatch) -> None:
     assert "benchmark-trained" in r.explanation and "Indian device streams" in r.explanation
 
 
-def test_a_high_score_is_flagged_and_a_low_one_is_not(synth, monkeypatch) -> None:
+def test_a_high_score_is_noted_but_does_not_vote_until_calibrated(synth, monkeypatch) -> None:
     ctx = synth.context(kind="genuine", turn=None, n_colour=2)
     monkeypatch.setattr(sbi, "get_model", lambda: sbi.SbiModel(lambda x: np.full(len(x), 0.9)))
     r = _one(ctx)
-    assert r.flag and r.risk == pytest.approx(0.9) and r.reason_codes == ["visual.sbi_high"]
+    assert not r.flag and r.risk == pytest.approx(0.9) and r.reason_codes == ["visual.sbi_high"]
+    ctx.thresholds = Thresholds(_read(PROVISIONAL), {"visual.sbi": {"voting": True}})  # as calibration may set it
+    r = _one(ctx)
+    assert r.flag and r.reason_codes == ["visual.sbi_high"]
     monkeypatch.setattr(sbi, "get_model", lambda: sbi.SbiModel(lambda x: np.full(len(x), 0.1)))
     r = _one(ctx)
     assert not r.flag and r.reason_codes == []
