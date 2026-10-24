@@ -1,5 +1,5 @@
-"""What every check receives, read in one pass: per-frame region means in linear light, yaw, the face box, region
-texture (noise and sharpness) and the sensor fingerprint."""
+"""What every check receives, read in one pass: per-frame region means in linear light, yaw, the face box, face
+proportions, region texture (noise and sharpness) and the sensor fingerprint."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import numpy as np
 from pulselens.analysis.landmarks import landmarks_for
 from pulselens.analysis.quality import QualityReport, assess
 from pulselens.analysis.thresholds import Thresholds
-from pulselens.analysis.vision.face import regions_from_landmarks, to_pixels
+from pulselens.analysis.vision.face import GEOMETRY_PAIRS, face_geometry, regions_from_landmarks, to_pixels
 from pulselens.analysis.vision.frames import REGION_NAMES, dhash, jpeg_quality, region_means
 from pulselens.analysis.vision.noise import TEXTURE_REGIONS, linear_green, region_texture
 from pulselens.analysis.vision.prnu import Fingerprint, FingerprintAccumulator
@@ -32,6 +32,7 @@ class AnalysisContext:
     regions: dict[str, RegionSeries]  # "skin", "left_cheek", "right_cheek", "neck", "background"
     yaw: np.ndarray  # (n,) degrees, NaN without a face (CONTRACT section 1 sign)
     face_box: np.ndarray  # (n, 4) x, y, w, h in pixels, NaN without a face
+    geometry: np.ndarray  # (n, 10) face proportions (vision/face.face_geometry), NaN without a face
     quality: QualityReport  # from quality.assess
     thresholds: Thresholds
     readable: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))  # (n,) the JPEG decoded
@@ -63,6 +64,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     cov = {name: np.zeros(n) for name in REGION_NAMES}
     yaw = np.full(n, np.nan)
     box = np.full((n, 4), np.nan)
+    geometry = np.full((n, len(GEOMETRY_PAIRS)), np.nan)
     readable = np.zeros(n, dtype=bool)
     hamming = np.full(n, np.nan)
     mad = np.full(n, np.nan)
@@ -91,7 +93,9 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         found = landmarks.get(meta.idx)
         regions = None
         if found and found.get("landmarks"):
-            regions = regions_from_landmarks(to_pixels(found["landmarks"], w, h), w, h)
+            pixels = to_pixels(found["landmarks"], w, h)
+            regions = regions_from_landmarks(pixels, w, h)
+            geometry[i] = face_geometry(pixels)
             yaw[i] = _num(found.get("yaw"))
             box[i] = regions.face_box.clip(w, h).xywh()
         for name, (mean, coverage) in region_means(rgb_u8, regions).items():
@@ -110,6 +114,7 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         regions=series,
         yaw=yaw,
         face_box=box,
+        geometry=geometry,
         quality=assess(t, series, box, bundle.events, bundle.challenge, thresholds=thresholds),
         thresholds=thresholds,
         readable=readable,

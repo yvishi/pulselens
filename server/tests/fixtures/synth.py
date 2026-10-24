@@ -91,14 +91,23 @@ def synthetic_landmarks(chin_y: float = 150.0) -> dict[int, tuple[float, float]]
         145: (140, top + 44), 374: (180, top + 44),
         50: (138, top + 66), 280: (182, top + 66),
         13: (cx, top + 88), 14: (cx, top + 92),
+        # turn.identity's proportions (vision/face.GEOMETRY_PAIRS)
+        33: (130, top + 40), 133: (150, top + 40), 362: (170, top + 40), 263: (190, top + 40),
+        168: (cx, top + 40), 1: (cx, top + 70), 98: (150, top + 72), 327: (170, top + 72),
+        61: (145, top + 90), 291: (175, top + 90), 172: (128, top + 95), 397: (192, top + 95),
     }
 
 
-def landmarks_478(chin_y: float = 150.0) -> list[list[float]]:
-    """All 478 landmarks, normalised, as landmarks.jsonl stores them. The unused ones sit at the face centre."""
+def landmarks_478(chin_y: float = 150.0, scale: float = 1.0) -> list[list[float]]:
+    """All 478 landmarks, normalised, as landmarks.jsonl stores them. The unused ones sit at the face centre.
+    `scale`: every landmark but the outer eye corners (33, 263) sits this many times farther from the face centre,
+    which changes every proportion turn.identity measures."""
     used = synthetic_landmarks(chin_y)
-    centre = (160.0, chin_y - 55)
-    return [[used.get(i, centre)[0] / W, used.get(i, centre)[1] / H, 0.0] for i in range(478)]
+    cx, cy = 160.0, chin_y - 55
+    if scale != 1.0:
+        used = {i: p if i in (33, 263) else (cx + (p[0] - cx) * scale, cy + (p[1] - cy) * scale)
+                for i, p in used.items()}
+    return [[used.get(i, (cx, cy))[0] / W, used.get(i, (cx, cy))[1] / H, 0.0] for i in range(478)]
 
 
 def make_challenge(session_id: str, nonce: str, *, n_colour: int, turn: Literal["left", "right"] | None,
@@ -202,6 +211,7 @@ def make_session(
     glare: bool = False,
     chin_y_late: float | None = None,
     jpeg_quality: int = 95,
+    identity_scale: float = 1.0,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -220,7 +230,9 @@ def make_session(
     Nuisances (G11): `flicker` is the depth of a 100 Hz room-light ripple (a tube light), averaged over
     `flicker_exposure_ms` per frame, so it aliases at low fps; `glare` blows out a band across the forehead;
     `chin_y_late` moves the face to that chin height from the session's midpoint on (near H: the neck leaves the
-    frame for the second half); `jpeg_quality` is the encoder quality (the browser sends 0.9, i.e. 90)."""
+    frame for the second half); `jpeg_quality` is the encoder quality (the browser sends 0.9, i.e. 90).
+    `identity_scale`: from the start of the head's return on, the landmarks are drawn with landmarks_478(scale=...),
+    a face that comes back from the turn with other proportions (G10, turn.identity)."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
@@ -257,12 +269,13 @@ def make_session(
     a, b = t - flicker_exposure_ms, t
     ripple = 1 + flicker * (np.sin(w100 * b) - np.sin(w100 * a)) / (w100 * flicker_exposure_ms) if flicker else None
     late = t >= t[-1] / 2 if chin_y_late is not None else np.zeros(len(t), dtype=bool)
+    rescaled = t >= ev.ended_t_ms - 800 if identity_scale != 1.0 and ev is not None else np.zeros(len(t), dtype=bool)
     fx0, fx1 = 120, 200
     frames, lms = [], {}
     for i, ti in enumerate(t):
         chin = chin_y_late if late[i] else chin_y
         fy0, fy1 = int(chin - 110), int(chin)
-        lm = landmarks_478(chin)
+        lm = landmarks_478(chin, identity_scale if rescaled[i] else 1.0)
         img = np.empty((H, W, 3), dtype=np.float32)
         img[:] = wall[i] + rng.normal(0, noise / 5, 3) if noise else wall[i]
         if face_in_frames:
