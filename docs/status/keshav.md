@@ -3,6 +3,7 @@
 Only Keshav (and Keshav's agent) edits this file. Newest notes first in each section.
 
 ## Tasks
+- [x] Walkthrough doc: `docs/WALKTHROUGH.md` covers pipeline from input -> integrity -> checks -> fusion -> console with file pointers and privacy boundaries (Criterion 3). 2026-10-24.
 - [x] Delete raw frames on decision: `SessionStore` deletes `folder/frames` for unlabelled (/customer) sessions when agent decides, preserving lab sessions. Appends audit event `frames.deleted`, verified by audit; `frame_count` fallback to `frames.jsonl`. 4 tests in `test_store.py` and `test_audit.py`. 2026-10-24.
 - [x] Video ingest script: `scripts/ingest_video.py` converts judge video clips into real session bundles, matches challenges, runs full analysis, writes audit chain, and displays on console. 3 tests in `test_ingest_video.py`. 2026-10-24.
 - [x] K1 — scaffold and contract: `contracts.py` verbatim from CONTRACT §3, `contracts.ts` mirror, `bundle.py`, `config.py`, health route, `scripts/dev.py` (8 targets), web scaffold with the 5 final routes and Yash placeholders, typed `api/client.ts`. pytest 5 passed + 2 skipped (7 of 7 with OpenCV installed), vitest 5 passed, lint clean, Brave e2e 1 passed. 2026-10-22.
