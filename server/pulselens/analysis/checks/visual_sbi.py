@@ -44,10 +44,9 @@ def pick_frames(ctx: AnalysisContext, n: int, frontal_deg: float) -> np.ndarray:
 
 @guarded(SPEC)
 def run(ctx: AnalysisContext) -> list[CheckResult]:
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     model = sbi.get_model()
     if model is None:
-        return [abstain(*ids, ["visual.model_missing"], "SBI weights not installed.", window_id="all")]
+        return [abstain(SPEC, ["visual.model_missing"], "SBI weights not installed.", window_id="all")]
     p = ctx.thresholds.params(SPEC.check_id)
     n, min_crops, top_k = int(p.get("crops", 8)), int(p.get("min_crops", 4)), int(p.get("top_k", 3))
     crops = []
@@ -56,7 +55,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         if img is not None:
             crops.append(sbi.crop(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), tuple(ctx.face_box[i])))
     if len(crops) < min_crops:
-        return [abstain(*ids, ["quality.no_face"], f"Only {len(crops)} frames with a face to show the detector "
+        return [abstain(SPEC, ["quality.no_face"], f"Only {len(crops)} frames with a face to show the detector "
                         f"(need {min_crops}).", features={"crops": len(crops)}, window_id="all")]
     scores = np.sort(model.score(crops))[::-1]
     top = float(np.mean(scores[:top_k]))
@@ -65,7 +64,5 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                 "crops": len(crops)}
     explanation = (f"The detector scored the face {top:.2f} (mean of the top {min(top_k, len(scores))} of "
                    f"{len(crops)} frames; review level {flag_at:.2f}). {CAVEAT}")
-    return [result(*ids, risk=top, flag_at=flag_at, quality=len(crops) / n, features=features,
-                   reasons=["visual.sbi_high"] if top >= flag_at else [], explanation=explanation,
-                   source=ctx.thresholds.source(SPEC.check_id), window_id="all",
-                   voting=ctx.thresholds.voting(SPEC.check_id))]
+    return [result(SPEC, ctx.thresholds, risk=top, quality=len(crops) / n, features=features,
+                   reasons=["visual.sbi_high"] if top >= flag_at else [], explanation=explanation, window_id="all")]

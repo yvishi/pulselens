@@ -42,12 +42,11 @@ def _clear(o: EchoOnset, min_snr: float) -> bool:
 def run(ctx: AnalysisContext) -> list[CheckResult]:
     if light_not_run(ctx):
         return []
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     if (gate := session_abstain(ctx, SPEC, "compare the face with the neck")) is not None:
         return [gate]
     overall = ctx.quality.overall
     if "quality.neck_hidden" in overall.reasons:
-        return [abstain(*ids, ["quality.neck_hidden"], f"Only {overall.neck_coverage:.0%} of the neck area was in "
+        return [abstain(SPEC, ["quality.neck_hidden"], f"Only {overall.neck_coverage:.0%} of the neck area was in "
                         "the frame, too little to compare with the face.",
                         features={"neck_coverage": overall.neck_coverage}, window_id="all")]
     p = ctx.thresholds.params(SPEC.check_id)
@@ -57,7 +56,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     with np.errstate(invalid="ignore"):
         neck_level = float(np.nanmedian(neck.rgb_linear[face_seen].max(axis=1))) if face_seen.any() else math.nan
     if not math.isfinite(neck_level) or neck_level > sat:
-        return [abstain(*ids, ["quality.clipped"], "The neck was too bright to see a colour change.",
+        return [abstain(SPEC, ["quality.clipped"], "The neck was too bright to see a colour change.",
                         features={"neck_level": neck_level}, window_id="all")]
 
     a_min = float(ctx.thresholds.params("echo").get("a_min", 0.003))
@@ -110,12 +109,10 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         "neck_coverage": overall.neck_coverage,
     }
     quality = measured / len(events)
-    source = ctx.thresholds.source(SPEC.check_id)
     flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
-    voting = ctx.thresholds.voting(SPEC.check_id)
     if neck_only >= int(p.get("neck_only_steps", 2)) and neck_only * 2 >= measured:
-        return [result(*ids, risk=1.0, flag_at=flag_at, quality=quality, features=features,
-                       reasons=["light.neck_only"], source=source, window_id="all", voting=voting,
+        return [result(SPEC, ctx.thresholds, risk=1.0, quality=quality, features=features,
+                       reasons=["light.neck_only"], window_id="all",
                        explanation=f"The neck answered the screen light on {neck_only} of {measured} colour steps "
                                    f"while the face did not, as a face drawn over a real person would. {HYPOTHESIS}")]
     min_pairs = int(p.get("min_pairs", 3))
@@ -123,7 +120,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         detail = "; ".join(x for x in (f"{weak} too close to the noise" if weak else "",
                                        f"{unclear} too noisy on the face to tell" if unclear else "",
                                        f"{poor} with poor capture" if poor else "") if x)
-        return [abstain(*ids, ["light.too_few_steps"] + ["light.weak_echoes"] * (weak + unclear > 0),
+        return [abstain(SPEC, ["light.too_few_steps"] + ["light.weak_echoes"] * (weak + unclear > 0),
                         f"Face and neck both answered clearly on {len(ratios)} of {len(events)} colour steps "
                         f"(need {min_pairs}){'; ' + detail if detail else ''}.", quality=quality, features=features,
                         window_id="all")]
@@ -138,6 +135,6 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     else:
         explanation = (f"The face and neck answered the light together on {len(ratios)} colour steps "
                        f"(face/neck {ratio:.2f}x, within {1 / ratio_floor:.0f}x either way). {HYPOTHESIS}")
-    return [result(*ids, risk=risk, flag_at=flag_at, quality=quality, features=features,
-                   reasons=["light.ratio"] if flagged else [], explanation=explanation, source=source,
-                   window_id="all", voting=voting)]
+    return [result(SPEC, ctx.thresholds, risk=risk, quality=quality, features=features,
+                   reasons=["light.ratio"] if flagged else [], explanation=explanation,
+                   window_id="all")]

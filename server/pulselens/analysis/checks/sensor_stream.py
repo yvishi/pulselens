@@ -22,7 +22,7 @@ import numpy as np
 
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
-from pulselens.analysis.result import CheckSpec, abstain, guarded, result
+from pulselens.analysis.result import abstain, guarded, result
 from pulselens.contracts import CheckResult, ColourStep, Plot, TurnStep
 
 CADENCE, DUPLICATES = specs.SENSOR_CADENCE, specs.SENSOR_DUPLICATES
@@ -97,7 +97,7 @@ def _cadence(ctx: AnalysisContext) -> CheckResult:
     hidden = hidden_page(ctx.t, ctx)
     f = cadence_features(ctx.t, lost | hidden) if ctx.n >= min_frames else None
     if f is None:
-        return abstain(*_ids(CADENCE), ["quality.low_fps"],
+        return abstain(CADENCE, ["quality.low_fps"],
                        f"Only {ctx.n} frames arrived; at least {min_frames} are needed to judge the frame timing.")
     max_gap = float(p.get("max_gap_ms", 1000))
     f["frames_missing"] = float(np.sum(np.diff(idx)[lost] - 1)) if lost.any() else 0.0
@@ -125,10 +125,8 @@ def _cadence(ctx: AnalysisContext) -> CheckResult:
             reasons = [*reasons, "quality.page_hidden"]
         explanation += (f" A {f['longest_excluded_gap_ms']:.0f} ms gap is left out of the timing "
                         f"({' and '.join(why)}), not counted as a stall.")
-    return result(*_ids(CADENCE), risk=risk, flag_at=ctx.thresholds.flag_at(CADENCE.check_id, 0.6), quality=1.0,
-                  features=f, reasons=reasons, explanation=explanation,
-                  source=ctx.thresholds.source(CADENCE.check_id), window_id="all", plot=_cadence_plot(ctx.t),
-                  voting=ctx.thresholds.voting(CADENCE.check_id))
+    return result(CADENCE, ctx.thresholds, risk=risk, quality=1.0,
+                  features=f, reasons=reasons, explanation=explanation, window_id="all", plot=_cadence_plot(ctx.t))
 
 
 def _duplicates(ctx: AnalysisContext) -> CheckResult:
@@ -137,7 +135,7 @@ def _duplicates(ctx: AnalysisContext) -> CheckResult:
     n_compared = int(compared.sum())
     min_frames = int(p.get("min_frames", 30))
     if n_compared < min_frames:
-        return abstain(*_ids(DUPLICATES), ["quality.low_fps"],
+        return abstain(DUPLICATES, ["quality.low_fps"],
                        f"Only {n_compared} frame pairs could be compared; at least {min_frames} are needed.")
     typical = float(np.median(ctx.mad_prev[compared]))
     with np.errstate(invalid="ignore"):
@@ -149,21 +147,15 @@ def _duplicates(ctx: AnalysisContext) -> CheckResult:
     max_share = float(p.get("max_share", 0.05))
     flagged = share >= max_share
     return result(
-        *_ids(DUPLICATES),
+        DUPLICATES, ctx.thresholds,
         risk=min(1.0, share / max_share),
-        flag_at=ctx.thresholds.flag_at(DUPLICATES.check_id, 1.0),
         quality=float(ctx.readable.mean()),
         features={"dup_share": share, "longest_dup_run": duplicate_runs(dup), "compared": n_compared},
         reasons=["sensor.duplicates"] if flagged else [],
         explanation=f"{n_dup} of {n_compared} frames repeated the one before ({share:.1%}; limit {max_share:.0%}).",
-        source=ctx.thresholds.source(DUPLICATES.check_id),
         window_id="all",
-        voting=ctx.thresholds.voting(DUPLICATES.check_id),
     )
 
-
-def _ids(spec: CheckSpec) -> tuple[str, str, str]:
-    return spec.check_id, spec.family, spec.vote_group
 
 
 @guarded(CADENCE, DUPLICATES)

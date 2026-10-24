@@ -37,7 +37,7 @@ CHECKS: tuple[Callable[[AnalysisContext], list[CheckResult]], ...] = (
 
 
 def _no_frames(explanation: str) -> list[CheckResult]:
-    return [abstain(s.check_id, s.family, s.vote_group, ["quality.no_frames"], explanation) for s in specs.ALL]
+    return [abstain(s, ["quality.no_frames"], explanation) for s in specs.ALL]
 
 
 def analyze(session_dir: Path, thresholds: Thresholds | None = None) -> list[CheckResult]:

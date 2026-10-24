@@ -102,20 +102,24 @@ def test_every_check_is_guarded() -> None:
 
 
 def test_result_flags_only_at_the_threshold_and_clips_risk() -> None:
-    def make(risk: float, **kw) -> CheckResult:
-        return result("light.response", "C", "C.response", risk=risk, flag_at=0.5, quality=1.0, features={},
-                      reasons=[], explanation="x", source="provisional", **kw)
+    t = Thresholds({"light.response": {"flag_at": 0.5}, "sensor.prnu": {"flag_at": 0.5},
+                    "turn.follow": {"flag_at": 0.5, "voting": False}})
+
+    def make(risk: float, spec=specs.LIGHT_RESPONSE) -> CheckResult:
+        return result(spec, t, risk=risk, quality=1.0, features={}, reasons=[], explanation="x")
 
     assert make(0.5).flag and not make(0.49).flag
     assert make(1.7).risk == 1.0 and make(-1).risk == 0.0
-    assert not make(0.9, voting=False).flag
-    a = abstain("light.response", "C", "C.response", ["quality.low_fps"], "x")
+    assert make(0.5).threshold_source == "provisional"
+    assert not make(0.9, specs.TURN_FOLLOW).flag  # voting: false (S3)
+    assert not make(0.9, specs.SENSOR_PRNU).flag  # never flags, whatever the thresholds say
+    a = abstain(specs.LIGHT_RESPONSE, ["quality.low_fps"], "x")
     assert a.status == "abstain" and a.risk is None and not a.flag
 
 
 def test_features_keep_finite_numbers_only() -> None:
-    r = result("sensor.cadence", "B", "B.stream", risk=0, flag_at=0.6, quality=1, reasons=[], explanation="x",
-               source="provisional", features={"a": 1, "b": float("nan"), "c": None, "d": float("inf")})
+    r = result(specs.SENSOR_CADENCE, Thresholds({"sensor.cadence": {"flag_at": 0.6}}), risk=0, quality=1, reasons=[],
+               explanation="x", features={"a": 1, "b": float("nan"), "c": None, "d": float("inf")})
     assert r.features == {"a": 1.0}
 
 
