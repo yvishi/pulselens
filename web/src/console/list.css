@@ -1,0 +1,684 @@
+/*
+ * Agent console: sign-in, "Start a verification" and the verifications list.
+ * Colours come only from the tokens in shared/styles.css, so dark mode follows. Outcome colours mark outcomes only.
+ */
+
+/* console.css fades .muted with opacity; on these pages the token colour alone is enough and stays readable. */
+.list-page .muted,
+.gate .muted {
+  opacity: 1;
+  color: var(--ink-soft);
+}
+
+.list-page .error,
+.gate .error {
+  color: var(--stop);
+}
+
+/* ---------- Sign in ---------- */
+.gate {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 140px);
+  min-height: calc(100dvh - 140px);
+  padding: 1.5rem 0;
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.75rem 1.5rem;
+}
+
+.gate-card h1 {
+  margin: 0.15rem 0 0.25rem;
+  font-size: var(--text-xl);
+}
+
+.gate-card > p {
+  margin: 0;
+}
+
+.gate-label {
+  margin-top: 1rem;
+  font-weight: 700;
+}
+
+.gate-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0.5rem 0.85rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  letter-spacing: 0.08em;
+}
+
+.gate-input:hover {
+  border-color: var(--ink-soft);
+}
+
+.gate-input[aria-invalid="true"] {
+  border-color: var(--stop);
+}
+
+.gate-hint {
+  font-size: var(--text-sm);
+}
+
+.gate-error {
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  background: var(--stop-tint);
+}
+
+.gate-submit {
+  margin-top: 0.75rem;
+  width: 100%;
+  font-size: var(--text-lg);
+  min-height: 52px;
+}
+
+/* ---------- Page head ---------- */
+.list-head {
+  padding: 1rem 0 1.25rem;
+  max-width: 46rem;
+}
+
+.list-head h1 {
+  margin: 0 0 0.35rem;
+  font-size: var(--text-2xl);
+}
+
+.list-head p {
+  margin: 0;
+}
+
+/* ---------- Start a verification ---------- */
+.start {
+  display: grid;
+  gap: 1.5rem 2.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .start:has(.share) {
+    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+  }
+}
+
+.start-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 32rem;
+}
+
+.start-title {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.start-lede {
+  margin: -0.5rem 0 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-label,
+.check-label {
+  font-weight: 700;
+}
+
+.field-select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0.5rem 2.5rem 0.5rem 0.85rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  appearance: none;
+  /* A chevron drawn with two gradients so it takes the ink colour in both themes. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+    linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.3rem) 52%,
+    calc(100% - 0.95rem) 52%;
+  background-size: 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+}
+
+.field-select:hover {
+  border-color: var(--ink-soft);
+}
+
+.check-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.check-option:has(input:checked) {
+  border-color: var(--stamp);
+  background: var(--stamp-tint);
+}
+
+.check-option input {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  min-height: 0;
+  margin: 0.1rem 0 0;
+  accent-color: var(--stamp);
+  cursor: pointer;
+}
+
+.check-label {
+  cursor: pointer;
+}
+
+.check-hint {
+  margin: 0.15rem 0 0;
+  font-size: var(--text-sm);
+}
+
+.start-go {
+  align-self: flex-start;
+  min-width: 12rem;
+  font-size: var(--text-lg);
+}
+
+.start-form > p {
+  margin: 0;
+}
+
+/* ---------- Share with the customer ---------- */
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2rem;
+  align-items: flex-start;
+  padding: 1.25rem;
+  border: 2px solid var(--stamp);
+  border-radius: var(--radius-lg);
+  background: var(--stamp-tint);
+}
+
+.share-text {
+  flex: 1 1 18rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.share-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--stamp);
+}
+
+.share-say {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.share-url {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: var(--text-sm);
+  word-break: break-all;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.share-actions .is-copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.share-feedback .error {
+  font-size: var(--text-sm);
+}
+
+.share-watch {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
+.share-id {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.share-qr {
+  flex: none;
+  max-width: 100%;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  background: #ffffff; /* a QR code needs a light quiet zone in both themes to scan */
+  line-height: 0;
+}
+
+.share-qr canvas {
+  display: block;
+  width: 256px;
+  max-width: 100%;
+  height: auto;
+}
+
+/* AgentActions shows CustomerLink without the section around it. */
+.actions .share {
+  margin-top: 0.75rem;
+}
+
+/* ---------- List ---------- */
+.list-section {
+  margin-top: 2rem;
+}
+
+.list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.list-title {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.demo-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.25rem 0 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.demo-tools .btn {
+  min-height: 40px;
+  font-size: var(--text-sm);
+}
+
+.demo-label {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  margin-right: 0.25rem;
+}
+
+.list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface-sunk);
+  max-width: 100%;
+}
+
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seg:hover {
+  color: var(--ink);
+}
+
+.seg[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--stamp);
+  box-shadow: var(--shadow);
+}
+
+.seg-count {
+  min-width: 1.6rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.seg[aria-pressed="true"] .seg-count {
+  background: var(--stamp-tint);
+  color: var(--stamp);
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 0 1 18rem;
+  min-width: 0;
+}
+
+.search-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.search-input:hover {
+  border-color: var(--ink-soft);
+}
+
+.empty {
+  padding: 2rem 1.25rem;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.empty p {
+  margin: 0.25rem 0;
+}
+
+.empty-title {
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.btn.inline {
+  min-height: 0;
+  padding: 0 0.25rem;
+  font-size: inherit;
+}
+
+/* The table: a card with roomy rows, the whole row opens the session. */
+.list-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.list-table th,
+.list-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.list-table th {
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.list-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.list-table .row {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.list-table .row:hover,
+.list-table .row:focus-within {
+  background: var(--stamp-tint);
+}
+
+/* A thin outcome edge on finished rows, so attention rows stand out while scanning. */
+.list-table .row > td:first-child {
+  box-shadow: inset 4px 0 0 transparent;
+}
+
+.list-table .row-ok > td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+.list-table .row-warn > td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+.list-table .row-stop > td:first-child { box-shadow: inset 4px 0 0 var(--stop); }
+
+.session-link {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.cell-session .sub,
+.cell-stack .sub {
+  display: block;
+}
+
+.sub {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.sub.lab {
+  font-family: var(--font-mono);
+}
+
+.cell-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+/* console.css draws chips with a border; here the tone fill says it. */
+.list-table .chip {
+  display: inline-flex;
+  border: 0;
+  font-size: var(--text-sm);
+}
+
+.code {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.03em;
+}
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.progress::before {
+  content: "";
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.progress-preflight::before,
+.progress-capturing::before,
+.progress-analysing::before {
+  background: var(--stamp);
+  animation: list-pulse 1.4s ease-in-out infinite;
+}
+
+.progress-created::before {
+  border: 2px solid var(--stamp);
+  background: transparent;
+}
+
+.progress-done::before {
+  background: var(--ink-soft);
+}
+
+.progress-expired {
+  color: var(--ink-soft);
+}
+
+@keyframes list-pulse {
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress::before {
+    animation: none !important;
+  }
+}
+
+/* Narrow screens: each row becomes a card, labels come from data-label. */
+@media (max-width: 699px) {
+  .start {
+    padding: 1.1rem;
+  }
+
+  .start-go,
+  .share-watch {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .share {
+    padding: 1rem;
+  }
+
+  .share-qr {
+    margin-inline: auto;
+  }
+
+  .search {
+    flex: 1 1 100%;
+  }
+
+  .list-table,
+  .list-table tbody,
+  .list-table tr,
+  .list-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .list-table {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .list-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .list-table .row {
+    margin-bottom: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .list-table .row-ok { border-left: 5px solid var(--ok); }
+  .list-table .row-warn { border-left: 5px solid var(--warn); }
+  .list-table .row-stop { border-left: 5px solid var(--stop); }
+
+  .list-table .row > td:first-child,
+  .list-table .row-ok > td:first-child,
+  .list-table .row-warn > td:first-child,
+  .list-table .row-stop > td:first-child {
+    box-shadow: none;
+  }
+
+  .list-table td {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .list-table td::before {
+    content: attr(data-label);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+
+  .list-table tbody tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .list-table .cell-session {
+    display: block;
+    padding-top: 0.85rem;
+    background: var(--surface-sunk);
+  }
+
+  .list-table .cell-session::before {
+    content: none;
+  }
+
+  .list-table .cell-session .sub {
+    display: inline;
+    margin-left: 0.6rem;
+  }
+}
