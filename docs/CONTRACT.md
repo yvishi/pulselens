@@ -168,6 +168,15 @@ class TurnStep(Model):
     duration_ms: int
 
 
+class PulseHoldStep(Model):
+    """Neutral-screen steady hold. Dormant until planner and capture integration."""
+
+    kind: Literal["pulse_hold"] = "pulse_hold"
+    step_id: str
+    start_offset_ms: int = Field(ge=0)  # from the end of the baseline
+    duration_ms: int = Field(gt=0)
+
+
 Step = Annotated[ColourStep | TurnStep, Field(discriminator="kind")]
 
 
