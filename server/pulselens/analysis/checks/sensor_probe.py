@@ -28,15 +28,14 @@ SPEC = specs.SENSOR_MODE_PROBE
 
 @guarded(SPEC)
 def run(ctx: AnalysisContext) -> list[CheckResult]:
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     pf = ctx.bundle.preflight
     rows = list(pf.probe) if pf is not None else []
     if not rows:
-        return [abstain(*ids, ["sensor.probe_not_run"], "The mode-switch probe did not run in this browser, so it is "
+        return [abstain(SPEC, ["sensor.probe_not_run"], "The mode-switch probe did not run in this browser, so it is "
                         "recorded as unsupported, not failed.", window_id="all")]
     accepted = [r for r in rows if r.accepted]
     if not accepted:
-        return [abstain(*ids, ["sensor.probe_not_run"], f"The camera accepted none of the {len(rows)} exact modes "
+        return [abstain(SPEC, ["sensor.probe_not_run"], f"The camera accepted none of the {len(rows)} exact modes "
                         "asked for, so it is recorded as unsupported, not failed.",
                         features={"requests": len(rows), "accepted": 0}, window_id="all")]
 
@@ -77,7 +76,5 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                if unusual_ok and unusual.switch_ms is not None
                else f"did not deliver the unusual {w}x{h} mode")
         explanation = f"The camera accepted {len(accepted)} of {len(rows)} modes and {how}, as a real sensor can."
-    return [result(*ids, risk=risk, flag_at=ctx.thresholds.flag_at(SPEC.check_id, 0.7), quality=1.0,
-                   features=features, reasons=reasons, explanation=explanation,
-                   source=ctx.thresholds.source(SPEC.check_id), window_id="all",
-                   voting=ctx.thresholds.voting(SPEC.check_id))]
+    return [result(SPEC, ctx.thresholds, risk=risk, quality=1.0,
+                   features=features, reasons=reasons, explanation=explanation, window_id="all")]

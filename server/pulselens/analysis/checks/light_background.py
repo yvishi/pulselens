@@ -28,7 +28,6 @@ HYPOTHESIS = "This compares the face with the room behind it as a hypothesis aga
 def run(ctx: AnalysisContext) -> list[CheckResult]:
     if light_not_run(ctx):
         return []
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     if (gate := session_abstain(ctx, SPEC, "compare the face with the background")) is not None:
         return [gate]
     p = ctx.thresholds.params(SPEC.check_id)
@@ -37,7 +36,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     bg_cov = float(np.median(bg.coverage[face_seen])) if face_seen.any() else 0.0
     min_cov = float(p.get("min_coverage", 0.2))
     if bg_cov < min_cov:
-        return [abstain(*ids, ["light.background_hidden"], f"Only {bg_cov:.0%} of the frame was background "
+        return [abstain(SPEC, ["light.background_hidden"], f"Only {bg_cov:.0%} of the frame was background "
                         f"(need {min_cov:.0%}).", features={"background_coverage": bg_cov}, window_id="all")]
 
     a_min = float(ctx.thresholds.params("echo").get("a_min", 0.003))
@@ -65,7 +64,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     features = {"steps": len(ratios), "median_bg_ratio": float(np.median(ratios)) if ratios else None,
                 "background_coverage": bg_cov, "steps_poor_quality": poor}
     if len(ratios) < min_steps:
-        return [abstain(*ids, ["light.weak_face_echo"], f"The face answered the light clearly on only {len(ratios)} "
+        return [abstain(SPEC, ["light.weak_face_echo"], f"The face answered the light clearly on only {len(ratios)} "
                         f"of {len(events)} colour steps (need {min_steps}), so there is nothing to compare the "
                         "background with.", quality=len(ratios) / len(events), features=features, window_id="all")]
     ratio = features["median_bg_ratio"]
@@ -79,7 +78,5 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     else:
         explanation = (f"The background answered the screen light {ratio:.0%} as strongly as the face over "
                        f"{len(ratios)} steps (limit {max_ratio:.0%}). {HYPOTHESIS}")
-    return [result(*ids, risk=risk, flag_at=flag_at, quality=len(ratios) / len(events), features=features,
-                   reasons=["light.background_even"] if flagged else [], explanation=explanation,
-                   source=ctx.thresholds.source(SPEC.check_id), window_id="all",
-                   voting=ctx.thresholds.voting(SPEC.check_id))]
+    return [result(SPEC, ctx.thresholds, risk=risk, quality=len(ratios) / len(events), features=features,
+                   reasons=["light.background_even"] if flagged else [], explanation=explanation, window_id="all")]

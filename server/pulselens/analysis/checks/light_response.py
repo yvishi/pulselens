@@ -132,7 +132,6 @@ def _plot(steps: list[StepEcho], markers: list[tuple[float, str]]) -> Plot:
 def run(ctx: AnalysisContext) -> list[CheckResult]:
     if light_not_run(ctx):
         return []
-    ids = (SPEC.check_id, SPEC.family, SPEC.vote_group)
     p = ctx.thresholds.params(SPEC.check_id)
     if (gate := session_abstain(ctx, SPEC, "time the light response")) is not None:
         return [gate]
@@ -155,7 +154,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         if poor:
             what = ", ".join(reason_text(r).rstrip(".").lower() for r in window_reasons)
             why += f"; {len(poor)} had poor capture ({what})"
-        return [abstain(*ids, ["light.too_few_steps"] + ["light.weak_face_echo"] * (unclear > 0) + window_reasons,
+        return [abstain(SPEC, ["light.too_few_steps"] + ["light.weak_face_echo"] * (unclear > 0) + window_reasons,
                         f"Only {len(valid)} of {len(steps)} colour steps could be judged on the face (need "
                         f"{min_steps}){why}.", quality=quality,
                         features={"steps_valid": len(valid), "steps_shown": len(steps), "steps_unclear": unclear,
@@ -187,9 +186,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                        "saw this screen would.")
     return [
         result(
-            *ids,
+            SPEC, ctx.thresholds,
             risk=risk,
-            flag_at=flag_at,
             quality=quality,
             features={
                 "steps_valid": len(valid),
@@ -203,9 +201,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
             },
             reasons=reasons,
             explanation=explanation,
-            source=ctx.thresholds.source(SPEC.check_id),
             window_id="all",
             plot=_plot([s for s in steps if s.onset.valid], [(s.painted, s.step_id) for s in steps]),
-            voting=ctx.thresholds.voting(SPEC.check_id),
         )
     ]
