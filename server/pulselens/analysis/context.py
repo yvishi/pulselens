@@ -45,6 +45,12 @@ class AnalysisContext:
     sharpness: dict[str, np.ndarray] = field(default_factory=dict)  # variance of the Laplacian of 8-bit green
     fingerprint: Fingerprint | None = None  # PRNU over the usable frames (vision/prnu.py); None below 30 frames
     jpeg_quality: int | None = None  # the encoder quality of the first readable frame (vision/frames.jpeg_quality)
+    # Head pitch, degrees, from landmarks.jsonl "pitch"; NaN without a face or a pitch. turn.nod does not rely on its
+    # sign (on 15 of 18 real sessions a higher pitch brought the nose closer to the chin, i.e. positive = down).
+    pitch: np.ndarray = field(default_factory=lambda: np.zeros(0))  # (n,)
+    # Mouth opening (visual.lip_digits): inner-lip gap (landmarks 13-14) over the face height (10-152); NaN without
+    # a face.
+    mouth_open: np.ndarray = field(default_factory=lambda: np.zeros(0))  # (n,)
 
     @property
     def n(self) -> int:
@@ -55,6 +61,20 @@ def _num(x: Any) -> float:
     return float(x) if isinstance(x, int | float) and np.isfinite(x) else np.nan
 
 
+MOUTH_INNER = (13, 14)  # MediaPipe inner upper and lower lip, centre
+FACE_HEIGHT = (10, 152)  # forehead top, chin
+
+
+def mouth_open(pixels: dict[int, tuple[float, float]]) -> float:
+    """Inner-lip gap over the face height, from pixel landmarks; NaN if a point is missing or the face has no height."""
+    if not all(i in pixels for i in (*MOUTH_INNER, *FACE_HEIGHT)):
+        return np.nan
+    (ax, ay), (bx, by) = pixels[MOUTH_INNER[0]], pixels[MOUTH_INNER[1]]
+    (cx, cy), (dx, dy) = pixels[FACE_HEIGHT[0]], pixels[FACE_HEIGHT[1]]
+    height = float(np.hypot(cx - dx, cy - dy))
+    return float(np.hypot(ax - bx, ay - by)) / height if height > 0 else np.nan
+
+
 def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     """Frames are decoded one at a time, so a 900-frame session is never all in memory. A frame that does not decode
     keeps its place in `t`, with NaN regions, yaw and face box."""
@@ -63,6 +83,8 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
     rgb = {name: np.full((n, 3), np.nan) for name in REGION_NAMES}
     cov = {name: np.zeros(n) for name in REGION_NAMES}
     yaw = np.full(n, np.nan)
+    pitch = np.full(n, np.nan)
+    mouth = np.full(n, np.nan)
     box = np.full((n, 4), np.nan)
     geometry = np.full((n, len(GEOMETRY_PAIRS)), np.nan)
     readable = np.zeros(n, dtype=bool)
@@ -97,6 +119,8 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
             regions = regions_from_landmarks(pixels, w, h)
             geometry[i] = face_geometry(pixels)
             yaw[i] = _num(found.get("yaw"))
+            pitch[i] = _num(found.get("pitch"))
+            mouth[i] = mouth_open(pixels)
             box[i] = regions.face_box.clip(w, h).xywh()
         for name, (mean, coverage) in region_means(rgb_u8, regions).items():
             rgb[name][i] = mean
@@ -125,4 +149,6 @@ def build_context(bundle: Bundle, thresholds: Thresholds) -> AnalysisContext:
         sharpness=sharp,
         fingerprint=prnu.result(),
         jpeg_quality=quality_jpeg,
+        pitch=pitch,
+        mouth_open=mouth,
     )

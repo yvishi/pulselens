@@ -2,10 +2,10 @@
 
 A live face swap is rebuilt frame by frame; at large angles it can slip, and the face that comes back from the turn
 need not have the proportions of the one that left. Before = the frames before the turn prompt; after = the frames
-after the turn's peak, once the head is back. Both only at near-frontal yaw (within `frontal_deg` of the starting
-angle), so the 2-D proportions are compared at the same pose. Proportions are vision/face.GEOMETRY_PAIRS: 10
-distances between eye corners, nose, mouth corners and jaw, in units of the outer eye-corner distance; each side's
-value is the median over its frames.
+after the turn's peak, once the head is back (and before a nod or digit prompt, which move the face). Both only at
+near-frontal yaw (within `frontal_deg` of the starting angle), so the 2-D proportions are compared at the same pose.
+Proportions are vision/face.GEOMETRY_PAIRS: 10 distances between eye corners, nose, mouth corners and jaw, in units of
+the outer eye-corner distance; each side's value is the median over its frames.
 
 change = the median over the 10 distances of |after / before - 1| (the median, so one jittery landmark cannot decide);
 risk = 0.5 x change / max_change, capped at 1, so it reaches flag_at 0.5 at the provisional 15% (`max_change`).
@@ -21,10 +21,15 @@ from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.reason_text import reason_text
 from pulselens.analysis.result import abstain, guarded, result
-from pulselens.contracts import CheckResult, TurnStep
+from pulselens.contracts import Challenge, CheckResult, DigitStep, NodStep, TurnStep
 
 SPEC = specs.TURN_IDENTITY
 UNSEEN = ("quality.no_face", "quality.too_dark", "quality.clipped")
+
+
+def _later_prompts(ch: Challenge) -> set[str]:
+    """The step ids of the nod and digit prompts that follow the turn (challenge.extra_prompts)."""
+    return {s.step_id for s in ch.steps if isinstance(s, NodStep | DigitStep)}
 
 
 @guarded(SPEC)
@@ -57,7 +62,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     in_turn = seen & (t >= painted) & (t <= ended)
     t_peak = float(t[in_turn][np.argmax(away[in_turn])]) if in_turn.any() else ended
     frontal = away < float(ctx.thresholds.param(SPEC.check_id, "frontal_deg"))
-    before, after = pre & frontal, seen & frontal & (t > t_peak)
+    # After the turn, only until the next prompt is shown: a nod or speaking changes the face's 2-D proportions.
+    prompts = _later_prompts(ch)
+    later = [e.painted_t_ms for e in ctx.bundle.events if e.step_id in prompts and e.painted_t_ms is not None]
+    stop = min((x for x in later if x > painted), default=np.inf)
+    before, after = pre & frontal, seen & frontal & (t > t_peak) & (t < stop)
     n_before, n_after = int(before.sum()), int(after.sum())
     min_frames = int(ctx.thresholds.param(SPEC.check_id, "min_frames"))
     if min(n_before, n_after) < min_frames:

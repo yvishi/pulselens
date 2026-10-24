@@ -1,10 +1,10 @@
 """The quality gate, service step 3: is each window of the session good enough to judge?
 
-Windows: "baseline" (before the first step), one per shown step ("c0".., "t0"), and "all". Rules (provisional, in
-thresholds.yaml under `quality:`): fps, face present, face luma in range, neck visible, face still, nothing clipped.
-Every failed rule is a reason code. A window is `usable` when every rule that applies passes; two are left to the
-checks: the neck (only checks that use it ask, through `blocking(neck=True)`) and motion in a turn window (the
-person is asked to move, so the rule does not apply there and the turn's frames do not count in "all").
+Windows: "baseline" (before the first step), one per shown step ("c0".., "t0", "n0", "d0"..), and "all". Rules
+(provisional, in thresholds.yaml under `quality:`): fps, face present, face luma in range, neck visible, face still,
+nothing clipped. Every failed rule is a reason code. A window is `usable` when every rule that applies passes; two are
+left to the checks: the neck (only checks that use it ask, through `blocking(neck=True)`) and motion in a turn, nod or
+digit window (the person is asked to move, so the rule does not apply there and those frames do not count in "all").
 
 Poor quality makes a check abstain; it is never attack evidence (AGENTS.md rule 3).
 """
@@ -20,7 +20,7 @@ import numpy as np
 from pulselens.analysis import specs
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.linearize import linear_to_srgb
-from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, TurnStep
+from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, DigitStep, NodStep, TurnStep
 
 if TYPE_CHECKING:
     from pulselens.analysis.context import RegionSeries
@@ -152,6 +152,12 @@ def assess(t: np.ndarray, regions: Mapping[str, RegionSeries], face_box: np.ndar
             elif isinstance(step, TurnStep):
                 ended = e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms
                 end = ended + float(th.param(specs.TURN_FOLLOW.check_id, "tail_ms"))
+                mask = (t >= e.painted_t_ms) & (t <= end)
+                turn |= mask
+                windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, th, motion_rule=False)
+            elif isinstance(step, NodStep | DigitStep):  # asked to nod or to speak: like the turn, motion is no rule
+                tail = float(th.param(specs.TURN_NOD.check_id, "tail_ms")) if isinstance(step, NodStep) else 0.0
+                end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms) + tail
                 mask = (t >= e.painted_t_ms) & (t <= end)
                 turn |= mask
                 windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, th, motion_rule=False)

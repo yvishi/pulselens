@@ -23,7 +23,7 @@ import numpy as np
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.result import abstain, guarded, result
-from pulselens.contracts import CheckResult, ColourStep, Plot, TurnStep
+from pulselens.contracts import CheckResult, ColourStep, DigitStep, NodStep, Plot, TurnStep
 
 CADENCE, DUPLICATES = specs.SENSOR_CADENCE, specs.SENSOR_DUPLICATES
 MAX_PLOT_POINTS = 300
@@ -63,7 +63,7 @@ def hidden_page(t: np.ndarray, ctx: AnalysisContext, slack_ms: float = 250.0) ->
     ch = ctx.bundle.challenge
     if ch is None or len(t) < 2:
         return out
-    steps = {s.step_id: s for s in ch.steps if isinstance(s, ColourStep | TurnStep)}
+    steps = {s.step_id: s for s in ch.steps if isinstance(s, ColourStep | TurnStep | NodStep | DigitStep)}
     for e in ctx.bundle.events:
         step = steps.get(e.step_id)
         if e.status != "skipped" or e.skip_reason != "page_hidden" or step is None:

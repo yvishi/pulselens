@@ -31,8 +31,10 @@ from pulselens.contracts import (
     Challenge,
     ChallengeEvent,
     ColourStep,
+    DigitStep,
     FrameMeta,
     Label,
+    NodStep,
     Plan,
     Preflight,
     TurnStep,
@@ -99,44 +101,56 @@ def synthetic_landmarks(chin_y: float = 150.0) -> dict[int, tuple[float, float]]
     }
 
 
-def landmarks_478(chin_y: float = 150.0, scale: float = 1.0) -> list[list[float]]:
+def landmarks_478(chin_y: float = 150.0, scale: float = 1.0, mouth_px: float = 0.0) -> list[list[float]]:
     """All 478 landmarks, normalised, as landmarks.jsonl stores them. The unused ones sit at the face centre.
     `scale`: every landmark but the outer eye corners (33, 263) sits this many times farther from the face centre,
-    which changes every proportion turn.identity measures."""
+    which changes every proportion turn.identity measures. `mouth_px`: the inner lower lip (14) this many pixels
+    lower, an open mouth (visual.lip_digits; no proportion turn.identity measures uses it)."""
     used = synthetic_landmarks(chin_y)
     cx, cy = 160.0, chin_y - 55
     if scale != 1.0:
         used = {i: p if i in (33, 263) else (cx + (p[0] - cx) * scale, cy + (p[1] - cy) * scale)
                 for i, p in used.items()}
+    if mouth_px:
+        used[14] = (used[14][0], used[14][1] + mouth_px)
     return [[used.get(i, (cx, cy))[0] / W, used.get(i, (cx, cy))[1] / H, 0.0] for i in range(478)]
 
 
+def _end(s: ColourStep | TurnStep | NodStep | DigitStep) -> int:
+    return s.start_offset_ms + (s.dwell_ms if isinstance(s, ColourStep) else s.duration_ms)
+
+
 def make_challenge(session_id: str, nonce: str, *, n_colour: int, turn: Literal["left", "right"] | None,
-                   rng: random.Random) -> Challenge:
+                   rng: random.Random, nod: bool = False, digits: bool = False) -> Challenge:
     """The engine's own CAPABLE challenge (engine.planner.make_challenge: hues, gaps and the tail come from there),
     cut to the first `n_colour` colour steps and turned the way asked. Steps after a cut colour step move earlier by
-    the time it took, so the schedule stays the planner's."""
+    the time it took, so the schedule stays the planner's. The nod and digit steps (challenge.extra_prompts) are kept
+    only when asked (`nod`, `digits`), so every other synthetic session is exactly what it was before them."""
     plan = Plan(mode="CAPABLE", run_light=n_colour > 0, run_turn=turn is not None, agent_questions=False,
                 reasons=["mode.capable.ok"])
     ch = planner.make_challenge(plan, session_id, nonce, rng, load_config())
     colour = [s for s in ch.steps if isinstance(s, ColourStep)]
     kept = colour[:n_colour]
     assert len(kept) == n_colour, f"the planner offers {len(colour)} colour steps"
-    cut = (colour[-1].start_offset_ms + colour[-1].dwell_ms if colour else 0) - (
-        kept[-1].start_offset_ms + kept[-1].dwell_ms if kept else 0)
-    steps: list[ColourStep | TurnStep] = list(kept)
-    for s in ch.steps:
-        if isinstance(s, TurnStep) and turn is not None:
-            start = s.start_offset_ms - cut if kept else 0
-            steps.append(s.model_copy(update={"direction": turn, "start_offset_ms": start}))
-    shift = cut if kept or turn is None else next(
-        (s.start_offset_ms for s in ch.steps if isinstance(s, TurnStep)), 0)
-    return ch.model_copy(update={"steps": steps, "total_ms": ch.total_ms - shift})
+    cut = (_end(colour[-1]) if colour else 0) - (_end(kept[-1]) if kept else 0)
+    later = [s for s in ch.steps if (isinstance(s, TurnStep) and turn is not None) or (isinstance(s, NodStep) and nod)
+             or (isinstance(s, DigitStep) and digits)]
+    shift = cut if kept or not later else later[0].start_offset_ms  # no colour kept: the first later step starts at 0
+    steps: list[ColourStep | TurnStep | NodStep | DigitStep] = list(kept)
+    for s in later:
+        update: dict = {"start_offset_ms": s.start_offset_ms - shift}
+        if isinstance(s, TurnStep):
+            update["direction"] = turn
+        steps.append(s.model_copy(update=update))
+    return ch.model_copy(update={"steps": steps, "total_ms": (_end(steps[-1]) if steps else 0) + planner.TAIL_MS})
 
 
-def challenge_events(ch: Challenge) -> list[ChallengeEvent]:
+def challenge_events(ch: Challenge, skip: frozenset[str] = frozenset()) -> list[ChallengeEvent]:
+    """Every step shown on schedule, except the step ids in `skip` (no event: the prompt never reached the screen)."""
     out = []
     for s in ch.steps:
+        if s.step_id in skip:
+            continue
         painted = ch.baseline_ms + s.start_offset_ms + PAINT_LAG_MS
         if isinstance(s, ColourStep):
             out.append(ChallengeEvent(step_id=s.step_id, status="shown", painted_t_ms=painted,
@@ -184,6 +198,38 @@ def _yaw(t: np.ndarray, events: list[ChallengeEvent], ch: Challenge, followed: b
     return sign * TURN_DEG * ramp
 
 
+NOD_DEG = 20.0
+MOUTH_OPEN_PX = 8.0  # over a face 110 px tall: a 0.073 rise in mouth_open, about a spoken digit
+
+
+def _ramp(t: np.ndarray, a: float, b: float, ramp_ms: float) -> np.ndarray:
+    """0 outside [a, b], 1 inside, with linear ramps of `ramp_ms` at both ends."""
+    return np.clip((t - a) / ramp_ms, 0, 1) - np.clip((t - b) / ramp_ms, 0, 1)
+
+
+def _pitch(t: np.ndarray, ch: Challenge, events: list[ChallengeEvent], performed: bool) -> np.ndarray:
+    """Head pitch: still, or (performed) down NOD_DEG from 300 ms after the nod prompt and back by 1.4 s."""
+    step = next((s for s in ch.steps if isinstance(s, NodStep)), None)
+    ev = next((e for e in events if step is not None and e.step_id == step.step_id), None)
+    if not performed or ev is None:
+        return np.zeros(len(t))
+    return NOD_DEG * _ramp(t, ev.painted_t_ms + 300, ev.painted_t_ms + 1000, 400)
+
+
+def _mouth(t: np.ndarray, ch: Challenge, events: list[ChallengeEvent], mode: str | None) -> np.ndarray:
+    """Extra inner-lip gap in pixels per frame (see make_session `digits`)."""
+    ids = {s.step_id for s in ch.steps if isinstance(s, DigitStep)}
+    painted = [e.painted_t_ms for e in events if e.step_id in ids]
+    out = np.zeros(len(t))
+    if mode == "in_sync":
+        for p in painted:
+            out += MOUTH_OPEN_PX * _ramp(t, p + 400, p + 800, 100)
+    elif mode == "out_of_sync" and painted:
+        span = (t >= painted[0] - 1000) & (t <= painted[-1] + 2700)
+        out[span] = MOUTH_OPEN_PX * (0.5 + 0.5 * np.sin(2 * np.pi * 3.0 * t[span] / 1000))
+    return out
+
+
 def make_session(
     root: Path,
     *,
@@ -216,6 +262,8 @@ def make_session(
     pulse: float = 0.0,
     pulse_hz: float = 1.2,
     face_pulse_hz: float | None = None,
+    nod: Literal["performed", "skipped", "not_shown"] | None = None,
+    digits: Literal["in_sync", "silent", "out_of_sync", "not_shown"] | None = None,
 ) -> Path:
     """Writes a complete bundle (bundle.write_bundle) plus landmarks.jsonl under `root` and returns its path.
 
@@ -239,12 +287,19 @@ def make_session(
     a face that comes back from the turn with other proportions (G10, turn.identity).
     `pulse`: the depth of a blood-volume pulse in the face and the neck skin (0.01 = 1%, PBV-weighted per channel),
     at `pulse_hz`; `face_pulse_hz` gives the face its own rate (a swap driven by another person's face). The neck
-    box stands for neck skin here, as the old repo's neck region did (G10, pulse.coherence)."""
+    box stands for neck skin here, as the old repo's neck region did (G10, pulse.coherence).
+    The extra prompts (challenge.extra_prompts; None = not in the challenge, as before them): `nod` "performed" tilts
+    the head 20 degrees down and back, "skipped" shows the prompt and keeps the head still, "not_shown" has no event.
+    `digits` "in_sync" opens the mouth 400-900 ms after each digit appears, "silent" keeps it closed, "out_of_sync"
+    talks at 3 Hz all through the digits (a replayed talking face), "not_shown" has no digit events."""
     rng = np.random.default_rng(seed)
     session_id = f"synth{seed:03d}{kind[:4]}"
     path = Path(root) / session_id
-    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=random.Random(seed))
-    events = challenge_events(ch)
+    ch = make_challenge(session_id, f"{seed:032x}", n_colour=n_colour, turn=turn, rng=random.Random(seed),
+                        nod=nod is not None, digits=digits is not None)
+    skip = {s.step_id for s in ch.steps if (isinstance(s, NodStep) and nod == "not_shown")
+            or (isinstance(s, DigitStep) and digits == "not_shown")}
+    events = challenge_events(ch, frozenset(skip))
 
     perfect = kind == "virtual_camera"
     noise = 0.0 if perfect else noise
@@ -269,6 +324,10 @@ def make_session(
     wall = _light(t, interval, events, delay_ms, background_echo * k_screen) * WALL
     yaw = _yaw(t, events, ch, turn_followed, performed=turn_performed, start_ms=turn_start_ms,
                returns=turn_returns) + (0 if perfect else rng.normal(0, 0.5, len(t)))
+    # Own generator: the sessions without a nod draw exactly the random numbers they drew before.
+    pitch = _pitch(t, ch, events, nod == "performed") + (
+        np.random.default_rng(seed + 7919).normal(0, 0.5, len(t)) if nod is not None and not perfect else 0)
+    mouth = _mouth(t, ch, events, digits)
     lost = np.zeros(len(t), dtype=bool)
     ev = _turn_event(ch, events)
     if face_lost_in_turn > 0 and ev is not None:
@@ -287,7 +346,7 @@ def make_session(
     for i, ti in enumerate(t):
         chin = chin_y_late if late[i] else chin_y
         fy0, fy1 = int(chin - 110), int(chin)
-        lm = landmarks_478(chin, identity_scale if rescaled[i] else 1.0)
+        lm = landmarks_478(chin, identity_scale if rescaled[i] else 1.0, float(mouth[i]))
         img = np.empty((H, W, 3), dtype=np.float32)
         img[:] = wall[i] + rng.normal(0, noise / 5, 3) if noise else wall[i]
         if face_in_frames:
@@ -307,7 +366,8 @@ def make_session(
         ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(srgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
         assert ok
         frames.append((FrameMeta(idx=i, t_ms=float(ti), w=W, h=H), jpeg.tobytes()))
-        lms[i] = {"landmarks": lm, "yaw": float(yaw[i]), "pitch": 0.0} if face_in_frames and not lost[i] else None
+        lms[i] = ({"landmarks": lm, "yaw": float(yaw[i]), "pitch": float(pitch[i]) if nod is not None else 0.0}
+                  if face_in_frames and not lost[i] else None)
 
     label = Label(person="P00", device="D00", light="normal", kind=LABEL_KIND[kind], set="A", consent_ref="synthetic")
     session = {"session_id": session_id, "nonce": ch.nonce, "product": "savings_account", "no_flash": False,

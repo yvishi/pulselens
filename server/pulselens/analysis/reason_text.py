@@ -52,6 +52,10 @@ REASON_TEXT: dict[str, str] = {
     "turn.identity_change": "The face's proportions changed through the turn.",
     "visual.model_missing": "The SBI detector weights are not installed.",
     "visual.sbi_high": "The deepfake detector scored the face as likely manipulated.",
+    "turn.nod_not_performed": "The nod was asked for but not performed.",
+    "turn.nod_no_return": "The head nodded as asked but had not come back by the end (noted, not scored).",
+    "visual.digits_not_performed": "The digits shown were not read aloud (the lips did not move with them).",
+    "visual.lips_out_of_sync": "The lips moved, but not in time with the digits shown.",
     # family A: pulse (G10, logged only)
     "pulse.not_measured": "Pulse coherence needs steady, well-lit video at 20 fps or more.",
 }

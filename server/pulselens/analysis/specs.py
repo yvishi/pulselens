@@ -16,9 +16,12 @@ TURN_FOLLOW = CheckSpec("turn.follow", "D", "D.turn")
 TURN_IDENTITY = CheckSpec("turn.identity", "D", "D.identity")
 VISUAL_SBI = CheckSpec("visual.sbi", "D", "D.detector")
 PULSE_COHERENCE = CheckSpec("pulse.coherence", "A", "A.pulse", never_flags=True)  # logged only
+TURN_NOD = CheckSpec("turn.nod", "D", "D.nod")
+LIP_DIGITS = CheckSpec("visual.lip_digits", "D", "D.lips")
 
 ALL: tuple[CheckSpec, ...] = (
     SENSOR_CADENCE, SENSOR_DUPLICATES, SENSOR_MODE_PROBE, SENSOR_REGIONS, SENSOR_PRNU,
     LIGHT_RESPONSE, LIGHT_FACE_NECK, LIGHT_BACKGROUND,
     TURN_FOLLOW, TURN_IDENTITY, VISUAL_SBI, PULSE_COHERENCE,
+    TURN_NOD, LIP_DIGITS,
 )

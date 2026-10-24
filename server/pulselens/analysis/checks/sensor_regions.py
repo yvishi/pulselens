@@ -4,7 +4,7 @@ neck next to it, which one camera sensor gives about the same noise.
 
 Per-frame temporal noise and sharpness of the face, neck and background come from build_context (vision/noise.py).
 Only still frames count: the baseline and the gaps between steps, never a colour step (the light changes) or the
-turn (the head moves), from 100 ms before a step to 400 ms after it.
+turn, the nod or a spoken digit (the head or lips move), from 100 ms before a step to 400 ms after it.
 - Scored: the median noise ratio face/neck. Risk grows from |ln ratio| beyond ln 2.5 (`ratio_log_tolerance`), one
   unit per ln 2 (`ratio_log_scale`).
 - Reported, not scored: the noise ratio face/background and the sharpness ratio face/neck. The first real genuine
@@ -25,7 +25,7 @@ import numpy as np
 from pulselens.analysis import specs
 from pulselens.analysis.context import AnalysisContext
 from pulselens.analysis.result import abstain, guarded, result
-from pulselens.contracts import CheckResult, ColourStep, TurnStep
+from pulselens.contracts import CheckResult, ColourStep, DigitStep, NodStep, TurnStep
 
 SPEC = specs.SENSOR_REGIONS
 HYPOTHESIS = "A hypothesis: a repainted face may be smoother or noisier than the real neck."
@@ -48,6 +48,8 @@ def still_frames(ctx: AnalysisContext) -> np.ndarray:
         elif isinstance(step, TurnStep):
             tail = float(ctx.thresholds.param(specs.TURN_FOLLOW.check_id, "tail_ms"))
             end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms) + tail
+        elif isinstance(step, NodStep | DigitStep):  # the head nods, the lips move
+            end = (e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms) + AFTER_STEP_MS
         else:
             continue
         keep &= ~((t >= e.painted_t_ms - BEFORE_STEP_MS) & (t <= end))

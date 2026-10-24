@@ -111,3 +111,23 @@ pulse.coherence:
   min_seconds: 10            # of steady video outside the colour steps, gaps bridged (G10 task)
   max_fill_ms: 1000          # a gap up to this (a colour step, a head movement) is bridged; longer ends the span
   light_tail_ms: 200         # frames this long after a colour step still carry the screen's light
+
+turn.nod:                    # PROVISIONAL guesses, no nod in any real session yet; it never flags (risk 0 or abstain)
+  flag_at: 0.5
+  min_peak_deg: 10           # |pitch - pitch0| that counts as a nod (resting pitch moved 1-5 degrees sd, S2)
+  still_deg: 5               # above this from rest = the nod started (latency)
+  max_return_deg: 7          # back within this at the end, else turn.nod_no_return (noted, not scored)
+  baseline_ms: 500           # pitch0 = median pitch over this long before the prompt
+  tail_ms: 500               # the window runs to ended + this
+  return_window_ms: 300      # return_deg = median |pitch - pitch0| over the window's last 300 ms
+  too_fast_ms: 150           # noted, not scored
+
+visual.lip_digits:           # PROVISIONAL guesses; mouth_open = inner-lip gap / face height. It never flags
+  flag_at: 0.5
+  min_open: 0.025            # rise above the resting opening that counts as speaking (quiet S2 sessions: p95 0.006-0.02)
+  min_latency_ms: 150        # a digit's response window starts this long after it is painted ...
+  max_latency_ms: 1200       # ... and ends here (reading and saying a digit takes ~0.4-0.8 s)
+  quiet_after_ms: 1500       # from this long after a digit is painted until the next digit's window: should be quiet
+  baseline_ms: 800           # resting opening = median over this long before the first digit
+  min_answered: 2            # digits (of 3) whose window shows the lips opening
+  min_contrast: 2.0          # mean opening in the digit windows >= this x the quiet windows'
