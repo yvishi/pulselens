@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { now } from "../../capture/clock";
-import type { FaceTracker } from "../../capture/face";
+import { createFaceTracker, type FaceTracker } from "../../capture/face";
+import { defaultDeps } from "../../capture/session";
 import type { TurnPromptContext } from "../../capture/turnPrompt";
 import { ringTurnPrompt } from "./TurnPrompt";
+
+vi.mock("../../capture/face", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../capture/face")>()),
+  createFaceTracker: vi.fn(async () => ({ detect: () => ({ found: true, box: null, yawDeg: 5 }) })),
+}));
 
 function context(): TurnPromptContext & { prompts: (string | null)[] } {
   const prompts: (string | null)[] = [];
@@ -80,5 +86,22 @@ describe("ringTurnPrompt", () => {
     expect(root.querySelector("[data-ring]")).toBeNull();
     await vi.advanceTimersByTimeAsync(900);
     await p;
+  });
+});
+
+describe("one face tracker per session", () => {
+  it("the ring prompt reuses the session's shared tracker: createFaceTracker is called once", async () => {
+    const deps = defaultDeps();
+    const video = document.createElement("video");
+    void deps.faceTracker(); // the preflight's tracker
+    deps.createCoachMeter(video); // the coaching meter's tracker
+    const show = ringTurnPrompt()({ ...context(), faceTracker: deps.faceTracker });
+    await vi.advanceTimersByTimeAsync(0); // tracker loads
+    const p = show("left", 500);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(document.querySelector("[data-ring]")).not.toBeNull(); // the shared tracker drives the ring
+    await vi.advanceTimersByTimeAsync(600);
+    await p;
+    expect(vi.mocked(createFaceTracker)).toHaveBeenCalledTimes(1);
   });
 });

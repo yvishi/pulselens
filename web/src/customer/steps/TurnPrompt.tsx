@@ -5,16 +5,14 @@
  *
  * The ring is guidance only: the prompt ends after durationMs whatever happened; the server judges the turn.
  * If the face tracker cannot load, this is the plain text prompt (textTurnPrompt), with no ring.
+ * The tracker is the session's shared one (ctx.faceTracker), so the page loads MediaPipe once.
  */
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { now } from "../../capture/clock";
 import { createFaceTracker, type FaceTracker } from "../../capture/face";
 import { TurnMeter, arrowSide } from "../../capture/turn";
-import {
-  raiseSelfView, textTurnPrompt, type TurnDirection, type TurnPromptFactory,
-} from "../../capture/turnPrompt";
-import { nextFrame, sleep } from "../../capture/util";
+import { runPrompt, textTurnPrompt, type TurnDirection, type TurnPromptFactory } from "../../capture/turnPrompt";
 
 /** Above the light overlay (2147483000) and the raised self-view (2147483001). */
 const PROMPT_Z = "2147483002";
@@ -78,67 +76,59 @@ export function TurnPromptView({ direction, text, progress, mirrored = true }: T
 }
 
 export interface RingTurnPromptOptions {
-  /** default: createFaceTracker (MediaPipe); started when the challenge starts so it is ready by the turn */
-  loadTracker?: () => Promise<FaceTracker>;
+  /** overrides the tracker; default: the session's shared one (ctx.faceTracker), else createFaceTracker */
+  loadTracker?: () => Promise<FaceTracker | null>;
   /** the self-view is mirrored (front camera); default true */
   mirrored?: boolean;
 }
 
 export const ringTurnPrompt = (opts: RingTurnPromptOptions = {}): TurnPromptFactory => (ctx) => {
-  const { overlay, video, text } = ctx;
+  const { video, text } = ctx;
   let tracker: FaceTracker | null = null;
   let failed = false;
-  (opts.loadTracker ?? createFaceTracker)().then(
-    (t) => (tracker = t),
+  (opts.loadTracker ?? ctx.faceTracker ?? createFaceTracker)().then(
+    (t) => (t ? (tracker = t) : (failed = true)),
     () => (failed = true),
   );
   let lastTs = 0;
 
   return async (dir, durationMs) => {
     if (failed) return textTurnPrompt(ctx)(dir, durationMs);
-    const lower = raiseSelfView(video);
-    const host = document.createElement("div");
-    host.dataset.turnPrompt = dir;
-    Object.assign(host.style, {
-      position: "fixed", inset: "0", zIndex: PROMPT_Z, pointerEvents: "none", display: "flex",
-      alignItems: "center", justifyContent: "center", padding: "16px", boxSizing: "border-box",
+    return runPrompt(ctx, durationMs, () => {
+      const host = document.createElement("div");
+      host.dataset.turnPrompt = dir;
+      Object.assign(host.style, {
+        position: "fixed", inset: "0", zIndex: PROMPT_Z, pointerEvents: "none", display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "16px", boxSizing: "border-box",
+      });
+      document.body.append(host);
+      const root = createRoot(host);
+      const line = text(dir);
+      const meter = new TurnMeter(dir);
+      const render = (progress: number | null) =>
+        flushSync(() => root.render(<TurnPromptView direction={dir} text={line} progress={progress} mirrored={opts.mirrored} />));
+
+      let shown: number | null = tracker ? 0 : null;
+      render(shown);
+      let running = true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const tick = () => {
+        if (!running) return;
+        if (tracker) {
+          const ts = (lastTs = Math.max(lastTs + 1, now())); // MediaPipe VIDEO mode needs increasing timestamps
+          const p = meter.update(tracker.detect(video, ts).yawDeg, ts);
+          if (shown === null || Math.abs(p - shown) >= 0.01) render((shown = p));
+        }
+        timer = setTimeout(tick, DETECT_EVERY_MS);
+      };
+      tick();
+
+      return () => {
+        running = false;
+        clearTimeout(timer);
+        root.unmount();
+        host.remove();
+      };
     });
-    document.body.append(host);
-    const root = createRoot(host);
-    const line = text(dir);
-    const meter = new TurnMeter(dir);
-    const render = (progress: number | null) =>
-      flushSync(() => root.render(<TurnPromptView direction={dir} text={line} progress={progress} mirrored={opts.mirrored} />));
-
-    let shown: number | null = tracker ? 0 : null;
-    render(shown);
-    let running = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const tick = () => {
-      if (!running) return;
-      if (tracker) {
-        const ts = (lastTs = Math.max(lastTs + 1, now())); // MediaPipe VIDEO mode needs increasing timestamps
-        const p = meter.update(tracker.detect(video, ts).yawDeg, ts);
-        if (shown === null || Math.abs(p - shown) >= 0.01) render((shown = p));
-      }
-      timer = setTimeout(tick, DETECT_EVERY_MS);
-    };
-    tick();
-
-    await nextFrame();
-    await nextFrame();
-    const painted = now() - overlay.t0;
-    try {
-      await sleep(durationMs);
-    } finally {
-      running = false;
-      clearTimeout(timer);
-      root.unmount();
-      host.remove();
-      lower();
-    }
-    await nextFrame();
-    await nextFrame();
-    return { painted, ended: now() - overlay.t0 };
   };
 };

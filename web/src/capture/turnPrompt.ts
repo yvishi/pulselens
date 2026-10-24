@@ -6,6 +6,7 @@
  * The client never judges the turn; the prompt ends after durationMs whatever happened.
  */
 import { now } from "./clock";
+import type { FaceTracker } from "./face";
 import { nextFrame, sleep } from "./util";
 
 export type TurnDirection = "left" | "right";
@@ -18,6 +19,8 @@ export interface TurnPromptContext {
   video: HTMLVideoElement;
   /** the prompt text for a direction (customer strings) */
   text: (dir: TurnDirection) => string;
+  /** the session's shared face tracker (null when it cannot load); prompts that need one take it from here */
+  faceTracker?: () => Promise<FaceTracker | null>;
 }
 export type TurnPromptFactory = (ctx: TurnPromptContext) => ShowTurnPrompt;
 
@@ -46,19 +49,36 @@ export function raiseSelfView(video: HTMLVideoElement): () => void {
   };
 }
 
-export const textTurnPrompt: TurnPromptFactory = ({ overlay, video, text }) => async (dir, durationMs) => {
+/**
+ * The skeleton every turn prompt shares: raise the self-view, show() the prompt, wait two frames (painted), hold for
+ * durationMs, hide it (show's return) and put the self-view back, wait two frames (ended). Times are ms since t0.
+ */
+export async function runPrompt(
+  ctx: TurnPromptContext,
+  durationMs: number,
+  show: () => () => void,
+): Promise<{ painted: number; ended: number }> {
+  const { overlay, video } = ctx;
   const lower = raiseSelfView(video);
-  overlay.showPrompt(promptLine(dir, text(dir)));
-  await nextFrame();
-  await nextFrame();
-  const painted = now() - overlay.t0;
+  let hide: (() => void) | undefined;
+  let painted: number;
   try {
+    hide = show();
+    await nextFrame();
+    await nextFrame();
+    painted = now() - overlay.t0;
     await sleep(durationMs);
   } finally {
-    overlay.showPrompt(null);
+    hide?.();
     lower();
   }
   await nextFrame();
   await nextFrame();
   return { painted, ended: now() - overlay.t0 };
-};
+}
+
+export const textTurnPrompt: TurnPromptFactory = (ctx) => (dir, durationMs) =>
+  runPrompt(ctx, durationMs, () => {
+    ctx.overlay.showPrompt(promptLine(dir, ctx.text(dir)));
+    return () => ctx.overlay.showPrompt(null);
+  });
