@@ -94,6 +94,12 @@ turn.identity:
   max_change: 0.15           # median relative change of the 10 face proportions; risk 0.5 here
   frontal_deg: 10            # compare only frames within this of the starting yaw
   min_frames: 5              # frontal frames needed before and after the turn
+  # ArcFace (G10c), used instead of max_change when models/arcface/w600k_r50.onnx is installed:
+  min_similarity: 0.40       # provisional; cosine of the mean embeddings before vs after, risk 0.5 here. Genuine set
+                             # A (12 usable of 16, one person): 0.81 to 0.98, median 0.94 (risk <= 0.16); the same
+                             # person vs the YouTube replay's person: 0.07 to 0.09
+  arcface_frames: 6          # frames embedded on each side, spread over the frontal frames
+  arcface_min_frames: 3      # fewer embedded on a side: the proportions rule decides
 
 visual.sbi:
   flag_at: 0.5               # provisional; G9 sets it from genuine set A

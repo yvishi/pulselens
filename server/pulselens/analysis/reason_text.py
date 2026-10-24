@@ -50,6 +50,7 @@ REASON_TEXT: dict[str, str] = {
     "turn.too_fast": "The head turn started unusually fast after the prompt (measured, not scored).",
     "turn.no_frontal": "There were no frontal frames on both sides of the turn.",
     "turn.identity_change": "The face's proportions changed through the turn.",
+    "turn.identity_mismatch": "Face recognition did not match the face after the turn to the face before it.",
     "visual.model_missing": "The SBI detector weights are not installed.",
     "visual.sbi_high": "The deepfake detector scored the face as likely manipulated.",
     # family A: pulse (G10, logged only)

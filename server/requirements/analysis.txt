@@ -6,3 +6,6 @@ matplotlib
 # (pip install torch --index-url https://download.pytorch.org/whl/cpu) to avoid the CUDA download.
 torch
 efficientnet_pytorch
+# turn.identity (G10c): ArcFace w600k_r50.onnx on CPU. Optional: without it (or the model file) the check uses the
+# landmark proportions. The model is research-only and is installed per machine (docs/status/ganeev.md).
+onnxruntime
