@@ -19,7 +19,7 @@ export interface ChallengeDeps {
   t0: number;
   /** Shows the turn prompt; resolves with painted/ended in ms since t0. */
   showTurnPrompt: (dir: "left" | "right", durationMs: number) => Promise<{ painted: number; ended: number }>;
-  /** A reason to skip the next colour step ("fps_drop", "page_hidden", "no_flash") or null. */
+  /** A reason to skip the next colour step ("fps_drop", "page_hidden") or null. */
   shouldSkipLight: () => string | null;
 }
 
