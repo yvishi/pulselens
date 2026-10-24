@@ -20,7 +20,8 @@ def test_a_turn_followed_and_returned_is_not_flagged(synth, direction: str) -> N
     assert r.status == "usable" and not r.flag and r.risk == 0, r.explanation
     assert r.features["peak_deg"] == pytest.approx(30, abs=2)
     assert r.features["wrong_peak_deg"] < 3 and r.features["return_deg"] < 3
-    assert r.features["latency_ms"] == pytest.approx(300 + 400 / 3, abs=15)  # 10 of 30 degrees into the ramp
+    assert r.features["latency_ms"] == pytest.approx(300 + 400 / 3, abs=1000 / 30)  # 10 of 30 degrees into the ramp,
+    # within one frame at 30 fps (the synthetic frame-time jitter decides which frame crosses first)
     assert r.features["face_present"] == 1
     assert r.reason_codes == []
     assert r.plot is not None and r.plot.kind == "turn" and len(r.plot.series["yaw"]) <= 300

@@ -24,7 +24,7 @@ MODE_REASONS = (
     "mode.face_not_found",
 )
 
-TAIL_MS = 500  # after the last step, before the challenge ends
+TAIL_MS = 1500  # after the last step, before the challenge ends: a slow head is back from the turn (S2, 2026-10-24)
 
 
 def plan_session(pre: Preflight, session_no_flash: bool, cfg: dict[str, Any]) -> Plan:

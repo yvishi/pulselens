@@ -106,7 +106,7 @@ def test_challenge_safety(mode: str) -> None:
         assert [s.start_offset_ms for s in ch.steps] == sorted(s.start_offset_ms for s in ch.steps)
         changes = _changes(ch.steps)
         assert all(sum(t <= c < t + 1000 for c in changes) <= 3 for t in changes), "more than 3 changes in 1 s"
-        assert ch.total_ms == spans[-1][1] + 500
+        assert ch.total_ms == spans[-1][1] + 1500  # the tail: a slow head is back from the turn before capture ends
         assert len(turns) == 1 and turns[0].step_id == "t0"
         expected = {"CAPABLE": 6, "CONSTRAINED": 4, "NO_FLASH": 0}[mode]
         assert [s.step_id for s in colours] == [f"c{k}" for k in range(expected)]

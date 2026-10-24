@@ -87,6 +87,15 @@ describe("runChallenge", () => {
     }
   });
 
+  it("keeps recording until baseline + total_ms, so the head can come back after the turn", async () => {
+    const turn: Step = { kind: "turn", step_id: "t0", direction: "left", start_offset_ms: 0, duration_ms: 1500 };
+    const ch = { ...challenge([turn]), total_ms: 1500 + 1500 };
+    const t0 = now();
+    const { events } = await run(ch);
+    expect(events![0]!.ended_t_ms!).toBeLessThan(1000 + 3000);
+    expect(now() - t0).toBeGreaterThanOrEqual(1000 + 3000); // resolved only after the tail
+  });
+
   it("marks a step skipped with its reason and no paint time", async () => {
     const reasons = ["fps_drop", null, null];
     const { events, overlay } = await run(challenge([colour("c0", 40, 0), colour("c1", 200, 1000)]),
