@@ -30,17 +30,16 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return []
     if (gate := session_abstain(ctx, SPEC, "compare the face with the background")) is not None:
         return [gate]
-    p = ctx.thresholds.params(SPEC.check_id)
     bg = ctx.regions["background"]
     face_seen = ctx.regions["skin"].coverage >= 0.5
     bg_cov = float(np.median(bg.coverage[face_seen])) if face_seen.any() else 0.0
-    min_cov = float(p.get("min_coverage", 0.2))
+    min_cov = float(ctx.thresholds.param(SPEC.check_id, "min_coverage"))
     if bg_cov < min_cov:
         return [abstain(SPEC, ["light.background_hidden"], f"Only {bg_cov:.0%} of the frame was background "
                         f"(need {min_cov:.0%}).", features={"background_coverage": bg_cov}, window_id="all")]
 
-    a_min = float(ctx.thresholds.params("echo").get("a_min", 0.003))
-    min_snr = float(ctx.thresholds.params("light.face_neck").get("min_snr", 2.0))
+    a_min = float(ctx.thresholds.param("echo", "a_min"))
+    min_snr = float(ctx.thresholds.param("light.face_neck", "min_snr"))
     events = colour_events(ctx)
     ratios, poor = [], 0
     for step, e in events:
@@ -60,7 +59,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         along_bg = rb.magnitude * rb.cosine if rb.cosine is not None else 0.0
         ratios.append(max(0.0, along_bg) / (rf.magnitude * rf.cosine))
 
-    min_steps = int(p.get("min_steps", 3))
+    min_steps = int(ctx.thresholds.param(SPEC.check_id, "min_steps"))
     features = {"steps": len(ratios), "median_bg_ratio": float(np.median(ratios)) if ratios else None,
                 "background_coverage": bg_cov, "steps_poor_quality": poor}
     if len(ratios) < min_steps:
@@ -68,9 +67,9 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                         f"of {len(events)} colour steps (need {min_steps}), so there is nothing to compare the "
                         "background with.", quality=len(ratios) / len(events), features=features, window_id="all")]
     ratio = features["median_bg_ratio"]
-    max_ratio = float(p.get("max_bg_ratio", 0.8))
+    max_ratio = float(ctx.thresholds.param(SPEC.check_id, "max_bg_ratio"))
     risk = 0.5 * ratio / max_ratio
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
+    flag_at = ctx.thresholds.flag_at(SPEC.check_id)
     flagged = risk >= flag_at
     if flagged:
         explanation = (f"The background answered the screen light {ratio:.0%} as strongly as the face over "

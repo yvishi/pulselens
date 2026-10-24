@@ -49,8 +49,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [abstain(SPEC, ["quality.neck_hidden"], f"Only {overall.neck_coverage:.0%} of the neck area was in "
                         "the frame, too little to compare with the face.",
                         features={"neck_coverage": overall.neck_coverage}, window_id="all")]
-    p = ctx.thresholds.params(SPEC.check_id)
-    sat = float(ctx.thresholds.params("quality").get("saturation", 0.95))
+    sat = float(ctx.thresholds.param("quality", "saturation"))
     face_seen = ctx.regions["skin"].coverage >= 0.5
     neck = ctx.regions["neck"]
     with np.errstate(invalid="ignore"):
@@ -59,11 +58,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         return [abstain(SPEC, ["quality.clipped"], "The neck was too bright to see a colour change.",
                         features={"neck_level": neck_level}, window_id="all")]
 
-    a_min = float(ctx.thresholds.params("echo").get("a_min", 0.003))
-    min_snr = float(p.get("min_snr", 2.0))
-    tol = float(p.get("ratio_log_tolerance", 1.386))
+    a_min = float(ctx.thresholds.param("echo", "a_min"))
+    min_snr = float(ctx.thresholds.param(SPEC.check_id, "min_snr"))
+    tol = float(ctx.thresholds.param(SPEC.check_id, "ratio_log_tolerance"))
     ratio_floor = math.exp(-tol)  # the weakest face/neck ratio a real face shows
-    faint_z = float(p.get("faint_z", 3.0))
+    faint_z = float(ctx.thresholds.param(SPEC.check_id, "faint_z"))
     ratios, deltas = [], []
     neck_only = face_only = weak = unclear = poor = measured = 0
     events = colour_events(ctx)
@@ -109,13 +108,13 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         "neck_coverage": overall.neck_coverage,
     }
     quality = measured / len(events)
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
-    if neck_only >= int(p.get("neck_only_steps", 2)) and neck_only * 2 >= measured:
+    flag_at = ctx.thresholds.flag_at(SPEC.check_id)
+    if neck_only >= int(ctx.thresholds.param(SPEC.check_id, "neck_only_steps")) and neck_only * 2 >= measured:
         return [result(SPEC, ctx.thresholds, risk=1.0, quality=quality, features=features,
                        reasons=["light.neck_only"], window_id="all",
                        explanation=f"The neck answered the screen light on {neck_only} of {measured} colour steps "
                                    f"while the face did not, as a face drawn over a real person would. {HYPOTHESIS}")]
-    min_pairs = int(p.get("min_pairs", 3))
+    min_pairs = int(ctx.thresholds.param(SPEC.check_id, "min_pairs"))
     if len(ratios) < min_pairs:
         detail = "; ".join(x for x in (f"{weak} too close to the noise" if weak else "",
                                        f"{unclear} too noisy on the face to tell" if unclear else "",
@@ -127,7 +126,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
 
     ratio = features["median_ratio"]
     excess = max(0.0, abs(math.log(ratio)) - tol)
-    risk = excess / float(p.get("ratio_log_scale", 0.693))
+    risk = excess / float(ctx.thresholds.param(SPEC.check_id, "ratio_log_scale"))
     flagged = risk >= flag_at
     if flagged:
         explanation = (f"The face answered the light {ratio:.2f}x as strongly as the neck over {len(ratios)} steps, "

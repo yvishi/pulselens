@@ -90,8 +90,7 @@ def _cadence_plot(t: np.ndarray) -> Plot:
 
 
 def _cadence(ctx: AnalysisContext) -> CheckResult:
-    p = ctx.thresholds.params(CADENCE.check_id)
-    min_frames = int(p.get("min_frames", 30))
+    min_frames = int(ctx.thresholds.param(CADENCE.check_id, "min_frames"))
     idx = np.array([m.idx for m in ctx.bundle.frames], dtype=np.int64)
     lost = lost_in_upload(idx) if len(idx) == ctx.n else np.zeros(max(0, ctx.n - 1), dtype=bool)
     hidden = hidden_page(ctx.t, ctx)
@@ -99,10 +98,10 @@ def _cadence(ctx: AnalysisContext) -> CheckResult:
     if f is None:
         return abstain(CADENCE, ["quality.low_fps"],
                        f"Only {ctx.n} frames arrived; at least {min_frames} are needed to judge the frame timing.")
-    max_gap = float(p.get("max_gap_ms", 1000))
+    max_gap = float(ctx.thresholds.param(CADENCE.check_id, "max_gap_ms"))
     f["frames_missing"] = float(np.sum(np.diff(idx)[lost] - 1)) if lost.any() else 0.0
-    regular = (f["exact_share"] > float(p.get("too_regular_share", 0.98))
-               and f["cv"] < float(p.get("too_regular_cv", 0.01)))
+    regular = (f["exact_share"] > float(ctx.thresholds.param(CADENCE.check_id, "too_regular_share"))
+               and f["cv"] < float(ctx.thresholds.param(CADENCE.check_id, "too_regular_cv")))
     if f["longest_gap_ms"] > max_gap:
         risk, reasons = 1.0, ["sensor.stall"]
         explanation = (f"The video stopped for {f['longest_gap_ms']:.0f} ms (limit {max_gap:.0f} ms), "
@@ -130,21 +129,21 @@ def _cadence(ctx: AnalysisContext) -> CheckResult:
 
 
 def _duplicates(ctx: AnalysisContext) -> CheckResult:
-    p = ctx.thresholds.params(DUPLICATES.check_id)
     compared = np.isfinite(ctx.mad_prev)
     n_compared = int(compared.sum())
-    min_frames = int(p.get("min_frames", 30))
+    min_frames = int(ctx.thresholds.param(DUPLICATES.check_id, "min_frames"))
     if n_compared < min_frames:
         return abstain(DUPLICATES, ["quality.low_fps"],
                        f"Only {n_compared} frame pairs could be compared; at least {min_frames} are needed.")
     typical = float(np.median(ctx.mad_prev[compared]))
     with np.errstate(invalid="ignore"):
-        stands_out = (ctx.mad_prev == 0) | (ctx.mad_prev < float(p.get("rel_mad", 0.1)) * typical)
-        dup = (compared & (ctx.hamming_prev <= float(p.get("max_hamming", 2)))
-               & (ctx.mad_prev < float(p.get("max_mad", 0.5))) & stands_out)
+        rel = float(ctx.thresholds.param(DUPLICATES.check_id, "rel_mad"))
+        stands_out = (ctx.mad_prev == 0) | (ctx.mad_prev < rel * typical)
+        dup = (compared & (ctx.hamming_prev <= float(ctx.thresholds.param(DUPLICATES.check_id, "max_hamming")))
+               & (ctx.mad_prev < float(ctx.thresholds.param(DUPLICATES.check_id, "max_mad"))) & stands_out)
     n_dup = int(dup.sum())
     share = n_dup / n_compared
-    max_share = float(p.get("max_share", 0.05))
+    max_share = float(ctx.thresholds.param(DUPLICATES.check_id, "max_share"))
     flagged = share >= max_share
     return result(
         DUPLICATES, ctx.thresholds,

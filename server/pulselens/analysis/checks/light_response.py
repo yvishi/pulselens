@@ -84,12 +84,10 @@ def faint_echo_z(steps: list[StepEcho]) -> float | None:
 
 
 def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
-    p = ctx.thresholds.params(SPEC.check_id)
-    echo = ctx.thresholds.params("echo")
-    a_min = float(echo.get("a_min", 0.003))
-    lo, hi = (float(x) for x in echo.get("delay_band_ms", (0, 300)))
-    min_cos = float(p.get("min_cosine", 0.5))
-    order_snr = float(p.get("order_min_snr", 2.0))
+    a_min = float(ctx.thresholds.param("echo", "a_min"))
+    lo, hi = (float(x) for x in ctx.thresholds.param("echo", "delay_band_ms"))
+    min_cos = float(ctx.thresholds.param(SPEC.check_id, "min_cosine"))
+    order_snr = float(ctx.thresholds.param(SPEC.check_id, "order_min_snr"))
     skin = ctx.regions["skin"]
     out = []
     for step, e in colour_events(ctx):
@@ -106,10 +104,10 @@ def step_echoes(ctx: AnalysisContext) -> list[StepEcho]:
                             window_reasons=window.blocking() if window is not None else []))
     # Silent only with the power to hear an echo: the session's own answered echoes, else the provisional cap.
     amps = [s.onset.amplitude for s in out if s.answered and not s.window_reasons and s.onset.amplitude is not None]
-    hear = float(p.get("max_silent_threshold", 0.012))
+    hear = float(ctx.thresholds.param(SPEC.check_id, "max_silent_threshold"))
     if amps:
         hear = min(hear, 0.5 * float(np.median(amps)))
-    faint = (z := faint_echo_z(out)) is not None and z >= float(p.get("faint_echo_z", 2.5))
+    faint = (z := faint_echo_z(out)) is not None and z >= float(ctx.thresholds.param(SPEC.check_id, "faint_echo_z"))
     for s in out:
         if s.answered and not s.order_ok and not s.strong:
             s.unclear = "weak_colour"  # an echo, but too small a colour change to read its direction
@@ -132,7 +130,6 @@ def _plot(steps: list[StepEcho], markers: list[tuple[float, str]]) -> Plot:
 def run(ctx: AnalysisContext) -> list[CheckResult]:
     if light_not_run(ctx):
         return []
-    p = ctx.thresholds.params(SPEC.check_id)
     if (gate := session_abstain(ctx, SPEC, "time the light response")) is not None:
         return [gate]
 
@@ -141,7 +138,7 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     judged = [s for s in steps if s.onset.valid and not s.window_reasons]
     unclear = sum(not s.clear for s in judged)
     poor = [s for s in steps if s.window_reasons]
-    min_steps = int(p.get("min_steps", 4))
+    min_steps = int(ctx.thresholds.param(SPEC.check_id, "min_steps"))
     quality = len(valid) / len(steps)
     faint_z = faint_echo_z(steps)
     if len(valid) < min_steps:
@@ -166,8 +163,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     n_wrong = sum(s.wrong_order for s in valid)
     n_silent = sum(not s.ok and not s.wrong_order for s in valid)
     risk = 1.0 - n_ok / len(valid)
-    flag_at = ctx.thresholds.flag_at(SPEC.check_id, 0.5)
-    lo, hi = (float(x) for x in ctx.thresholds.params("echo").get("delay_band_ms", (0, 300)))
+    flag_at = ctx.thresholds.flag_at(SPEC.check_id)
+    lo, hi = (float(x) for x in ctx.thresholds.param("echo", "delay_band_ms"))
     delay = float(np.median([s.onset.onset_ms for s in answered])) if answered else None
     snrs = [s.onset.snr for s in answered if s.onset.snr is not None]
     reasons = []

@@ -33,11 +33,20 @@ class Thresholds:
         """Every parameter of a check or section (e.g. "quality", "light.response"), calibrated values on top."""
         return {**(self._provisional.get(key) or {}), **(self._calibrated.get(key) or {})}
 
+    def param(self, section: str, key: str) -> Any:
+        """One value, calibrated over provisional. There are no code defaults: a key missing from thresholds.yaml is a
+        KeyError, which a check's `guarded` turns into an abstain with `quality.check_error`."""
+        values = self.params(section)
+        if key not in values:
+            raise KeyError(f"{section}.{key} is not in thresholds.yaml")
+        return values[key]
+
     def source(self, check_id: str) -> ThresholdSource:
         return "calibrated" if "flag_at" in (self._calibrated.get(check_id) or {}) else "provisional"
 
-    def flag_at(self, check_id: str, default: float = 0.5) -> float:
-        return float(self.params(check_id).get("flag_at", default))
+    def flag_at(self, check_id: str) -> float:
+        return float(self.param(check_id, "flag_at"))
 
     def voting(self, check_id: str) -> bool:
+        """An optional switch, not a value: absent means the check votes (`voting: false` is set at S3)."""
         return bool(self.params(check_id).get("voting", True))
