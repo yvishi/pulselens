@@ -60,6 +60,13 @@ def test_runner_with_fake(store: SessionStore, pool) -> None:
     assert all(r["explanation"] == fake_analysis.EXPLANATION for r in results if r["check_id"].startswith("fake."))
 
 
+def test_runner_stamps_the_store_clock(tmp_path: Path, pool) -> None:
+    clock_store = SessionStore(tmp_path / "data", clock=lambda: 1_700_000_000_123.0)
+    folder = full_session(clock_store)
+    decision = run_analysis(folder, clock_store, pool=pool, fake=True)
+    assert decision.decided_at_ms == 1_700_000_000_123
+
+
 def test_runner_survives_analysis_exception(store: SessionStore, pool) -> None:
     folder = full_session(store)
 

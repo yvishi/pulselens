@@ -36,7 +36,7 @@ def snapshot(path: Path) -> dict:
     """Results and fused decision of one session bundle, without clocks (decided_at_ms) and free text."""
     bundle = load_bundle(path)
     results = check_integrity(bundle) + analyze(path)
-    decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)))
+    decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)), decided_at_ms=0)
     return {
         "results": [
             {

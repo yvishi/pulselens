@@ -69,6 +69,6 @@ def run_analysis(session_dir: Path, store: SessionStore, *, pool: Executor, fake
         log.exception("integrity check of %s raised", session_id)
         integrity = [analysis_error("The integrity check did not finish.")]
     results = integrity + _analyze_with_timeout(analyze or choose_analyze(fake), session_dir, timeout_s, pool)
-    decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)))
+    decision = fuse(results, bundle.plan, int(bundle.session.get("attempt", 1)), decided_at_ms=int(store.clock()))
     store.save_analysis(session_id, results, decision)
     return decision
