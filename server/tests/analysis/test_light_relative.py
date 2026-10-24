@@ -7,7 +7,7 @@ import pytest
 from pulselens.analysis import analyze
 from pulselens.analysis.checks import light_background, light_face_neck
 from pulselens.analysis.context import AnalysisContext, build_context
-from pulselens.analysis.thresholds import Thresholds
+from pulselens.analysis.thresholds import PROVISIONAL, Thresholds, _read
 from pulselens.bundle import load_bundle
 from tests.analysis.conftest import requalify
 from tests.fixtures.synth import H
@@ -66,9 +66,13 @@ def test_a_neck_that_answers_while_the_face_does_not_is_flagged(synth) -> None:
 
 def test_a_face_echo_far_outside_the_neck_ratio_is_flagged(synth) -> None:
     # The neck must still answer clearly (>= 2x its threshold), so a very weak neck needs quiet frames to be compared.
-    r = face_neck(synth.context(kind="genuine", turn=None, neck_gain=0.08, noise=0.001))
-    assert r.flag and "light.ratio" in r.reason_codes
-    assert r.features["median_ratio"] > 5.66  # beyond ln 4 + half of ln 2
+    ctx = synth.context(kind="genuine", turn=None, neck_gain=0.08, noise=0.001)
+    r = face_neck(ctx)
+    assert r.features["median_ratio"] > 5.66 and not r.flag  # 6.2x: inside ln 8, where real shirts reach (S2)
+    full = _read(PROVISIONAL)
+    ctx.thresholds = Thresholds({**full, "light.face_neck": {**full["light.face_neck"], "ratio_log_tolerance": 1.386}})
+    r = face_neck(ctx)
+    assert r.flag and "light.ratio" in r.reason_codes  # the rule itself: beyond ln 4 + half of ln 2
 
 
 def test_a_neck_too_weak_to_compare_abstains(synth) -> None:

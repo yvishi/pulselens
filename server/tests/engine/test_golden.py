@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from pulselens.analysis import analyze
+from pulselens.analysis.vision import sbi
 from pulselens.bundle import load_bundle
 from pulselens.engine.fusion import fuse
 from pulselens.engine.integrity import check_integrity
@@ -52,7 +53,9 @@ def snapshot(path: Path) -> dict:
     }
 
 
-def test_golden_unchanged(tmp_path: Path) -> None:
+def test_golden_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pinned without the SBI weights (research-only, installed per machine), so it is the same on every machine.
+    monkeypatch.setattr(sbi, "get_model", lambda: None)
     snaps = {name: snapshot(make_session(tmp_path / name, **kw)) for name, kw in CASES.items()}
     if os.environ.get("PULSE_UPDATE_GOLDEN") == "1":
         GOLDEN.write_text(json.dumps(snaps, indent=1, sort_keys=True) + "\n", encoding="utf-8")

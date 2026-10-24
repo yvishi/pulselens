@@ -3,6 +3,7 @@ import pytest
 
 from pulselens.analysis import analyze
 from pulselens.analysis.checks import sensor_regions
+from pulselens.analysis.thresholds import PROVISIONAL, Thresholds, _read
 from pulselens.analysis.vision.noise import robust_sigma
 from tests.fixtures.synth import H
 
@@ -26,10 +27,23 @@ def test_equal_noise_is_not_flagged(synth) -> None:
 
 
 @pytest.mark.parametrize("gain", [0.25, 4.0])
-def test_a_face_4x_smoother_or_noisier_than_the_neck_is_flagged(synth, gain: float) -> None:
-    r = _one(synth.context(kind="genuine", noise=REAL_NOISE, face_pixel_noise_gain=gain))
-    assert r.flag and r.risk >= 0.5 and r.reason_codes == ["sensor.regions_mismatch"], r.explanation
+def test_a_face_4x_smoother_or_noisier_than_the_neck_is_noted_and_flags_once_voting(synth, gain: float) -> None:
+    ctx = synth.context(kind="genuine", noise=REAL_NOISE, face_pixel_noise_gain=gain)
+    r = _one(ctx)  # measured, not voting until calibrated (S2: real faces were up to 5.4x their shirt)
+    assert not r.flag and r.risk >= 0.5 and r.reason_codes == ["sensor.regions_mismatch"], r.explanation
+    full = _read(PROVISIONAL)
+    ctx.thresholds = Thresholds(full, {"sensor.regions": {"voting": True}})
+    r = _one(ctx)
+    assert r.flag and r.reason_codes == ["sensor.regions_mismatch"]
     assert r.features["noise_face_neck_ratio"] == pytest.approx(gain, rel=0.25)
+
+
+def test_a_background_unlike_the_face_is_reported_not_scored(synth) -> None:
+    ctx = synth.context(kind="genuine", noise=REAL_NOISE)
+    ctx.noise["background"] = ctx.noise["background"] / 6  # S2: a real room was 6.1x quieter than the face
+    r = _one(ctx)
+    assert r.status == "usable" and not r.flag and r.risk == 0, r.explanation
+    assert r.features["noise_face_bg_ratio"] == pytest.approx(6, rel=0.2) and "reported only" in r.explanation
 
 
 def test_a_face_within_2_5x_is_not_flagged(synth) -> None:

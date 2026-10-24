@@ -6,13 +6,14 @@ weaker than the neck's. Per colour step, echo onsets and amplitudes for the face
 - a pair: both echoes clear (hold amplitude >= `min_snr` x their own threshold): amplitude ratio face/neck, and the
   constant-fraction delay face - neck (reported only: one webcam frame, 64-96 ms, is longer than any lag limit);
 - neck only: the neck's echo is clear and the face is *clearly* silent. Silent needs a face threshold low enough to
-  hear a quarter of the neck's echo (the weakest real face/neck ratio, exp(-ratio_log_tolerance)); otherwise the step
+  hear an eighth of the neck's echo (the weakest real face/neck ratio, exp(-ratio_log_tolerance)); otherwise the step
   is unclear and counts for neither side (the old repo's fix, after a darker exposure-locked face was misread). A face
   whose mean change over the step still pushes towards the colour shown (`echo.faint_z` standard errors, echo.hold_z)
   answered faintly, under weak light, and is unclear too (issue #17).
 Risk 1 when at least `neck_only_steps` (2) steps are neck only and they are at least half of the measured steps
 (kept from the old repo, so one odd step cannot flag a genuine person). Otherwise risk grows from |ln median ratio|
-beyond ln 4. Abstains when the neck is hidden or clipped, or with fewer than `min_pairs` (3) pairs.
+beyond ln 8 (S2: real faces answered down to 1/6.3 of a shirt).
+Abstains when the neck is hidden or clipped, or with fewer than `min_pairs` (3) pairs.
 """
 
 from __future__ import annotations
