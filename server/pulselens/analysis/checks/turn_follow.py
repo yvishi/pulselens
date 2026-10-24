@@ -70,10 +70,9 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
         why = f" ({event.skip_reason})" if event is not None and event.skip_reason else ""
         return [abstain(SPEC, ["turn.not_performed"], f"The turn prompt was not shown{why}.", window_id=step.step_id)]
 
-    p = ctx.thresholds.params(SPEC.check_id)
     painted = event.painted_t_ms
     ended = event.ended_t_ms if event.ended_t_ms is not None else painted + step.duration_ms
-    end = ended + float(p.get("tail_ms", 500))
+    end = ended + float(ctx.thresholds.param(SPEC.check_id, "tail_ms"))
     window = ctx.quality.windows.get(step.step_id)
     if window is not None and "quality.low_fps" in window.reasons:
         return [abstain(SPEC, ["quality.low_fps"], f"The camera delivered {window.fps:.1f} fps during the turn, too "
@@ -87,7 +86,8 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                         window_id=step.step_id)]
 
     t, yaw = ctx.t, ctx.yaw
-    before = (t >= painted - float(p.get("baseline_ms", 500))) & (t < painted) & np.isfinite(yaw)
+    baseline_ms = float(ctx.thresholds.param(SPEC.check_id, "baseline_ms"))
+    before = (t >= painted - baseline_ms) & (t < painted) & np.isfinite(yaw)
     if before.sum() < 2:
         return [abstain(SPEC, ["quality.no_face"], "The face was not found just before the turn prompt, so there is "
                         "no starting angle to compare with.", window_id=step.step_id)]
@@ -101,9 +101,9 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     e = (yaw - yaw0) * sign
     peak = float(np.max(e[seen])) if seen.any() else 0.0
     wrong = float(np.max(-e[seen])) if seen.any() else 0.0
-    still = float(p.get("still_deg", 10))
+    still = float(ctx.thresholds.param(SPEC.check_id, "still_deg"))
     latency = _crossing(t, e, seen, still, painted)
-    tail = seen & (t >= end - float(p.get("return_window_ms", 300)))
+    tail = seen & (t >= end - float(ctx.thresholds.param(SPEC.check_id, "return_window_ms")))
     ret = float(np.median(np.abs(yaw[tail] - yaw0))) if tail.any() else None
     features = {"peak_deg": peak, "wrong_peak_deg": wrong, "latency_ms": latency, "return_deg": ret,
                 "face_present": face_present, "yaw0_deg": yaw0}
@@ -111,18 +111,18 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     asked = f"to their {step.direction}"
 
     def usable(risk: float, reasons: list[str], explanation: str) -> list[CheckResult]:
-        if latency is not None and latency < float(p.get("too_fast_ms", 150)):
+        if latency is not None and latency < float(ctx.thresholds.param(SPEC.check_id, "too_fast_ms")):
             reasons = [*reasons, "turn.too_fast"]
         return [result(SPEC, ctx.thresholds, risk=risk, quality=face_present, features=features, reasons=reasons,
                        explanation=explanation, window_id=step.step_id, plot=plot)]
 
-    min_peak = float(p.get("min_peak_deg", 15))
+    min_peak = float(ctx.thresholds.param(SPEC.check_id, "min_peak_deg"))
     if wrong >= min_peak and peak < still:
         return usable(1.0, ["turn.wrong_direction"],
                       f"Asked to turn {asked}, the head turned {wrong:.0f} degrees the other way and at most "
                       f"{peak:.0f} degrees the way asked.")
     if peak >= min_peak:
-        max_ret = float(p.get("max_return_deg", 10))
+        max_ret = float(ctx.thresholds.param(SPEC.check_id, "max_return_deg"))
         lat = f" {latency:.0f} ms after the prompt" if latency is not None else ""
         if ret is not None and ret > max_ret:
             return usable(0.0, ["turn.no_return"],
@@ -130,12 +130,12 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
                           "degrees away at the end (noted, not scored).")
         back = f" and came back within {ret:.0f} degrees" if ret is not None else ""
         return usable(0.0, [], f"The head turned {peak:.0f} degrees {asked}{lat} as asked{back}.")
-    max_lost = float(p.get("max_face_lost", 0.4))
+    max_lost = float(ctx.thresholds.param(SPEC.check_id, "max_face_lost"))
     if 1 - face_present > max_lost:
-        return usable(float(p.get("face_lost_risk", 0.6)), ["turn.face_lost"],
+        return usable(float(ctx.thresholds.param(SPEC.check_id, "face_lost_risk")), ["turn.face_lost"],
                       f"The face was lost for {1 - face_present:.0%} of the turn (more than {max_lost:.0%}); a "
                       "hypothesis: a swapped face can drop out at large angles.")
-    if face_present < float(ctx.thresholds.params("quality").get("min_face_present", 0.8)):
+    if face_present < float(ctx.thresholds.param("quality", "min_face_present")):
         return [abstain(SPEC, ["quality.no_face"], f"The face was visible in {face_present:.0%} of the turn and "
                         f"moved at most {max(peak, wrong):.0f} degrees.", quality=face_present, features=features,
                         window_id=step.step_id)]

@@ -25,14 +25,14 @@ def light_not_run(ctx: AnalysisContext) -> bool:
 
 def session_abstain(ctx: AnalysisContext, spec: CheckSpec, what: str) -> CheckResult | None:
     """An abstain when the whole session is below the fps floor or the face is missing; else None."""
-    q = ctx.thresholds.params("quality")
     overall = ctx.quality.overall
     if "quality.low_fps" in overall.reasons:
+        min_fps = float(ctx.thresholds.param("quality", "min_fps"))
         return abstain(spec, overall.blocking(), f"The camera delivered {overall.fps:.1f} fps, below the "
-                       f"{float(q.get('min_fps', 12)):.0f} fps needed to {what}.", features={"fps": overall.fps},
-                       window_id="all")
+                       f"{min_fps:.0f} fps needed to {what}.", features={"fps": overall.fps}, window_id="all")
     if "quality.no_face" in overall.reasons:
+        min_present = float(ctx.thresholds.param("quality", "min_face_present"))
         return abstain(spec, overall.blocking(), f"The face was visible in {overall.face_present:.0%} of frames "
-                       f"(need {float(q.get('min_face_present', 0.8)):.0%}).", quality=overall.face_present,
+                       f"(need {min_present:.0%}).", quality=overall.face_present,
                        features={"face_present": overall.face_present}, window_id="all")
     return None

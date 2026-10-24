@@ -28,6 +28,7 @@ import { LightOverlay, chooseOverlayMode, type OverlayMode } from "./overlay";
 import { createFaceTracker, type FaceTracker } from "./face";
 import { lockForLight, shouldLock, type CameraLock } from "./lock";
 import { PREFLIGHT_MS, runPreflight } from "./preflight";
+import { withRetries } from "./retry";
 import { textTurnPrompt, type TurnDirection, type TurnPromptFactory } from "./turnPrompt";
 import { FrameUploader, type UploaderOptions, type UploaderStats } from "./uploader";
 
@@ -138,7 +139,7 @@ let sharedTracker: Promise<FaceTracker | null> | null = null;
 const faceTracker = () => (sharedTracker ??= createFaceTracker().catch(() => null));
 
 export const defaultDeps = (): CaptureSessionDeps => ({
-  api: client,
+  api: withRetries(client),
   secureContextError,
   isMobile: () => {
     const p = platformOf(navigator.userAgent, navigator.maxTouchPoints ?? 0);

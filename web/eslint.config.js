@@ -11,7 +11,10 @@ export default tseslint.config(
     files: ["**/*.{ts,tsx}"],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { "react-hooks": reactHooks },
-    rules: { ...reactHooks.configs.recommended.rules },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
   },
   {
     // One clock (docs/CONTRACT.md section 1): client times are performance.now() ms since t0, never Date.now().

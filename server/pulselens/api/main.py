@@ -62,7 +62,12 @@ def create_app(
     app = FastAPI(title="PulseLens", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.config = config
-    app.state.store = SessionStore(settings.data_dir, ttl_min=config["session"]["ttl_min"], clock=clock)
+    app.state.store = SessionStore(
+        settings.data_dir,
+        ttl_min=config["session"]["ttl_min"],
+        clock=clock,
+        delete_frames_on_decision=settings.delete_frames_on_decision,
+    )
     app.state.executor = executor
     app.state.analyze_pool = analyze_pool
     app.state.runner = runner or _default_runner(settings, config, analyze_pool)

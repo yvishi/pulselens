@@ -40,6 +40,7 @@ class Settings:
     agent_passcode: str
     data_dir: Path
     fake_analysis: bool
+    delete_frames_on_decision: bool = True
 
     @property
     def uses_placeholder(self) -> bool:
@@ -49,10 +50,15 @@ class Settings:
 def get_settings(env_file: Path = ROOT / ".env") -> Settings:
     env = {**_read_env_file(env_file), **os.environ}
     data_dir = Path(env.get("PULSE_DATA_DIR", "data/sessions"))
+    cfg = load_config() if CONFIG_PATH.exists() else {}
+    default_del = cfg.get("session", {}).get("delete_frames_on_decision", True)
+    del_frames = env.get("PULSE_DELETE_FRAMES_ON_DECISION")
+    delete_frames = del_frames == "1" if del_frames is not None else default_del
     settings = Settings(
         agent_passcode=env.get("AGENT_PASSCODE", PLACEHOLDER),
         data_dir=data_dir if data_dir.is_absolute() else ROOT / data_dir,
         fake_analysis=env.get("PULSE_FAKE_ANALYSIS", "0") == "1",
+        delete_frames_on_decision=bool(delete_frames),
     )
     if settings.uses_placeholder:
         log.warning("AGENT_PASSCODE is still %r; set a real value in .env", PLACEHOLDER)

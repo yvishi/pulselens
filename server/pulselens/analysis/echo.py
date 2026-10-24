@@ -113,7 +113,7 @@ def echo_onset(
     *,
     step_id: str = "",
     region: str = "",
-    a_min: float = 0.003,
+    a_min: float,
 ) -> EchoOnset:
     """`colour` is the step's linear RGB as painted."""
     out = EchoOnset(step_id=step_id, region=region, valid=False)
@@ -177,7 +177,7 @@ def echo_onset(
 
 def response(
     t: np.ndarray, series: RegionSeries, painted: float, ended: float, colour: np.ndarray | None, *,
-    a_min: float = 0.003,
+    a_min: float,
 ) -> Response | None:
     """The mean chromaticity change from the 300 ms baseline to [painted + 200, ended + 100] ms; None without enough
     usable frames on either side."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 import threading
 import time
 from collections.abc import Callable
@@ -45,13 +46,20 @@ class FrameCapExceeded(Exception):
 
 class SessionStore:
     def __init__(
-        self, root: Path, *, signer: TokenSigner | None = None, ttl_min: float = 15, clock: Clock = _wall_ms
+        self,
+        root: Path,
+        *,
+        signer: TokenSigner | None = None,
+        ttl_min: float = 15,
+        clock: Clock = _wall_ms,
+        delete_frames_on_decision: bool = True,
     ) -> None:
         self.root = Path(root)
         self.signer = signer or TokenSigner()
         self.root.mkdir(parents=True, exist_ok=True)
         self.ttl_ms = ttl_min * 60_000
         self.clock = clock
+        self.delete_frames_on_decision = delete_frames_on_decision
         self._locks: dict[str, threading.RLock] = {}
         self._locks_guard = threading.Lock()
 
@@ -175,8 +183,16 @@ class SessionStore:
     def record_agent(self, session_id: str, decision: AgentDecision) -> None:
         """agent.json (atomic) and its audit entry, under the lock."""
         with self.lock(session_id):
+            folder = self.path(session_id)
             self.save_model(session_id, "agent", decision)
-            audit.append(self.path(session_id), "agent.action", decision.model_dump(mode="json"))
+            audit.append(folder, "agent.action", decision.model_dump(mode="json"))
+            if self.delete_frames_on_decision:
+                session = self.get(session_id)
+                if session.get("label") is None:
+                    frames_dir = folder / "frames"
+                    if frames_dir.exists():
+                        shutil.rmtree(frames_dir)
+                    audit.append(folder, "frames.deleted", {"at_ms": int(self.clock()), "reason": "privacy_safeguard"})
 
     def has(self, session_id: str, name: str) -> bool:
         return (self.path(session_id) / f"{name}.json").exists()
@@ -190,7 +206,12 @@ class SessionStore:
                 return None
 
     def frame_count(self, session_id: str) -> int:
-        return len(list((self.path(session_id) / "frames").glob("*.jpg")))
+        folder = self.path(session_id)
+        frames_dir = folder / "frames"
+        if frames_dir.exists():
+            return len(list(frames_dir.glob("*.jpg")))
+        rows, _ = _read_jsonl(folder / "frames.jsonl")
+        return len(rows)
 
     def is_resend(self, session_id: str, meta: FrameBatchMeta, jpegs: list[bytes]) -> bool:
         """True when every frame of this batch is already stored under the same batch_seq with the same FrameMeta

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from pulselens.analysis import specs
 from pulselens.analysis.thresholds import Thresholds
 from pulselens.analysis.vision.linearize import linear_to_srgb
 from pulselens.contracts import Challenge, ChallengeEvent, ColourStep, TurnStep
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from pulselens.analysis.context import RegionSeries
 
 LUMA = np.array([0.2126, 0.7152, 0.0722])
-TURN_TAIL_MS = 500.0  # the turn window runs to ended + 500 ms, as turn.follow reads it
 NEUTRAL_RULES = ("quality.neck_hidden",)  # reported, but blocking only for checks that need the neck
 
 
@@ -84,17 +84,17 @@ def _motion(t: np.ndarray, box: np.ndarray) -> float:
 
 
 def _window(window_id: str, mask: np.ndarray, t: np.ndarray, regions: Mapping[str, RegionSeries],
-            face_box: np.ndarray, q: dict, *, motion_rule: bool) -> WindowQuality:
+            face_box: np.ndarray, th: Thresholds, *, motion_rule: bool) -> WindowQuality:
     n = int(mask.sum())
     tt, box = t[mask], face_box[mask]
     face = np.isfinite(box).all(axis=1) if n else np.zeros(0, dtype=bool)
     skin = regions["skin"].rgb_linear[mask][face] if n else np.empty((0, 3))
     neck = regions["neck"] if "neck" in regions else None
-    lo, hi = (float(x) for x in q.get("luma", (40, 220)))
+    lo, hi = (float(x) for x in th.param("quality", "luma"))
     luma = face_luma(skin) if len(skin) else np.empty(0)
     luma_ok = float(np.mean((luma >= lo) & (luma <= hi))) if len(luma) else 0.0
     neck_cov = float(np.median(neck.coverage[mask][face])) if neck is not None and face.any() else 0.0
-    sat_level = float(q.get("saturation", 0.95))
+    sat_level = float(th.param("quality", "saturation"))
     clipped = np.zeros(int(face.sum()), dtype=bool)
     if face.any():
         with np.errstate(invalid="ignore"):
@@ -112,18 +112,18 @@ def _window(window_id: str, mask: np.ndarray, t: np.ndarray, regions: Mapping[st
         usable=False,
     )
     reasons = []
-    if w.fps < float(q.get("min_fps", 12)):
+    if w.fps < float(th.param("quality", "min_fps")):
         reasons.append("quality.low_fps")
-    min_present = float(q.get("min_face_present", 0.8))
+    min_present = float(th.param("quality", "min_face_present"))
     if w.face_present < min_present:
         reasons.append("quality.no_face")
-    elif w.luma_ok < float(q.get("min_luma_ok", 0.8)):
+    elif w.luma_ok < float(th.param("quality", "min_luma_ok")):
         reasons.append("quality.too_dark" if float(np.median(luma)) < (lo + hi) / 2 else "quality.too_bright")
-    if w.face_present >= min_present and w.neck_coverage < float(q.get("min_neck_coverage", 0.5)):
+    if w.face_present >= min_present and w.neck_coverage < float(th.param("quality", "min_neck_coverage")):
         reasons.append("quality.neck_hidden")
-    if motion_rule and w.motion > float(q.get("max_motion", 0.5)):
+    if motion_rule and w.motion > float(th.param("quality", "max_motion")):
         reasons.append("quality.moving")
-    if w.saturated > float(q.get("max_saturated", 0.2)):
+    if w.saturated > float(th.param("quality", "max_saturated")):
         reasons.append("quality.clipped")
     w.reasons = reasons
     w.usable = not w.blocking()
@@ -133,13 +133,13 @@ def _window(window_id: str, mask: np.ndarray, t: np.ndarray, regions: Mapping[st
 def assess(t: np.ndarray, regions: Mapping[str, RegionSeries], face_box: np.ndarray, events: list[ChallengeEvent],
            challenge: Challenge | None, *, thresholds: Thresholds | None = None) -> QualityReport:
     """Motion is measured in face widths, so no pixel size is needed."""
-    q = (thresholds or Thresholds.load()).params("quality")
+    th = thresholds or Thresholds.load()
     t = np.asarray(t, dtype=np.float64)
     shown = {e.step_id: e for e in events if e.status == "shown" and e.painted_t_ms is not None}
     windows: dict[str, WindowQuality] = {}
     turn = np.zeros(len(t), dtype=bool)
     if challenge is not None:
-        windows["baseline"] = _window("baseline", t < challenge.baseline_ms, t, regions, face_box, q,
+        windows["baseline"] = _window("baseline", t < challenge.baseline_ms, t, regions, face_box, th,
                                       motion_rule=True)
         for step in challenge.steps:
             e = shown.get(step.step_id)
@@ -148,16 +148,16 @@ def assess(t: np.ndarray, regions: Mapping[str, RegionSeries], face_box: np.ndar
             if isinstance(step, ColourStep):
                 end = e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.dwell_ms
                 mask = (t >= e.painted_t_ms) & (t <= end)
-                windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, q, motion_rule=True)
+                windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, th, motion_rule=True)
             elif isinstance(step, TurnStep):
                 ended = e.ended_t_ms if e.ended_t_ms is not None else e.painted_t_ms + step.duration_ms
-                end = ended + TURN_TAIL_MS
+                end = ended + float(th.param(specs.TURN_FOLLOW.check_id, "tail_ms"))
                 mask = (t >= e.painted_t_ms) & (t <= end)
                 turn |= mask
-                windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, q, motion_rule=False)
-    windows["all"] = _window("all", np.ones(len(t), dtype=bool), t, regions, face_box, q, motion_rule=False)
+                windows[step.step_id] = _window(step.step_id, mask, t, regions, face_box, th, motion_rule=False)
+    windows["all"] = _window("all", np.ones(len(t), dtype=bool), t, regions, face_box, th, motion_rule=False)
     if (~turn).sum() >= 2:  # motion over the whole session, without the frames where the person was asked to turn
-        still = _window("all", ~turn, t, regions, face_box, q, motion_rule=True)
+        still = _window("all", ~turn, t, regions, face_box, th, motion_rule=True)
         windows["all"].motion = still.motion
         if "quality.moving" in still.reasons:
             windows["all"].reasons.append("quality.moving")

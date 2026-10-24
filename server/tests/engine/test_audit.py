@@ -149,7 +149,8 @@ def test_api_flow_writes_events_in_order(tmp_path: Path) -> None:
     folder = tmp_path / "data" / sid
     assert [ln["type"] for ln in _lines(folder)] == [
         "session.created", "challenge.issued", "frames.batch", "frames.batch", "events.received",
-        "analysis.done", "decision.made", "agent.action"]
+        "analysis.done", "decision.made", "agent.action", "frames.deleted"]
+    assert not (folder / "frames").exists()
     assert verify(folder) == (True, None)
 
 
