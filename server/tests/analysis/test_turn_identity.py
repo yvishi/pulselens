@@ -57,3 +57,8 @@ def test_no_face_abstains(synth) -> None:
 
 def test_no_turn_step_is_not_run(synth) -> None:
     assert turn_identity.run(synth.context(kind="genuine", turn=None)) == []
+
+
+def test_no_turn_means_nothing_to_compare(synth) -> None:
+    r = _one(synth.context(kind="genuine", n_colour=0, turn="left", turn_followed=False))
+    assert r.status == "abstain" and not r.flag and r.reason_codes == ["turn.not_performed"]

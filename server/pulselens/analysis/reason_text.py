@@ -48,6 +48,7 @@ REASON_TEXT: dict[str, str] = {
     "turn.face_lost": "The face was lost during the head turn.",
     "turn.no_return": "The head turned as asked but had not come back by the end (noted, not scored).",
     "turn.too_fast": "The head turn started unusually fast after the prompt (measured, not scored).",
+    "turn.frozen": "The head did not move at all, as a still image or a looped frame does.",
     "turn.no_frontal": "There were no frontal frames on both sides of the turn.",
     "turn.identity_change": "The face's proportions changed through the turn.",
     "visual.model_missing": "The SBI detector weights are not installed.",

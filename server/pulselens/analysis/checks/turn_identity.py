@@ -9,7 +9,9 @@ the outer eye-corner distance; each side's value is the median over its frames.
 
 change = the median over the 10 distances of |after / before - 1| (the median, so one jittery landmark cannot decide);
 risk = 0.5 x change / max_change, capped at 1, so it reaches flag_at 0.5 at the provisional 15% (`max_change`).
-Abstains with `turn.no_frontal` under `min_frames` frontal frames on either side, and on a session whose face was
+Abstains with `turn.not_performed` when the head did not turn (at least
+`turn.follow`'s min_peak_deg; S2: a still image reported "same face" and made family D look covered), with
+`turn.no_frontal` under `min_frames` frontal frames on either side, and on a session whose face was
 missing, too dark or clipped (landmarks of a face that cannot be seen are not evidence).
 """
 
@@ -60,7 +62,11 @@ def run(ctx: AnalysisContext) -> list[CheckResult]:
     yaw0 = float(np.median(yaw[pre]))
     away = np.abs(yaw - yaw0)
     in_turn = seen & (t >= painted) & (t <= ended)
-    t_peak = float(t[in_turn][np.argmax(away[in_turn])]) if in_turn.any() else ended
+    if not in_turn.any() or float(away[in_turn].max()) < float(
+            ctx.thresholds.param(specs.TURN_FOLLOW.check_id, "min_peak_deg")):
+        return [abstain(SPEC, ["turn.not_performed"], "The head did not turn, so there is no before and after to "
+                        "compare.", window_id=step.step_id)]
+    t_peak = float(t[in_turn][np.argmax(away[in_turn])])
     frontal = away < float(ctx.thresholds.param(SPEC.check_id, "frontal_deg"))
     # After the turn, only until the next prompt is shown: a nod or speaking changes the face's 2-D proportions.
     prompts = _later_prompts(ch)

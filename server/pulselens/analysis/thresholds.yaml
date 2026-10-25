@@ -88,6 +88,9 @@ turn.follow:
   baseline_ms: 500           # yaw0 = median yaw over this long before the prompt
   tail_ms: 500               # the window runs to ended + this
   return_window_ms: 300      # return_deg = median |yaw - yaw0| over the window's last 300 ms
+  frozen_deg: 0.2            # yaw spread (p95 - p5) before the prompt below this = a frozen head (S2: genuine
+                             # 0.55-37 degrees, a still image via OBS 0.05)
+  frozen_min_frames: 30
 
 turn.identity:
   flag_at: 0.5
