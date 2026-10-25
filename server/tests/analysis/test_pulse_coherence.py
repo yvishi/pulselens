@@ -59,3 +59,12 @@ def test_a_short_session_abstains(synth) -> None:
 def test_no_face_abstains(synth) -> None:
     r = _one(synth.context(kind="genuine", face_in_frames=False))
     assert r.status == "abstain" and "pulse.not_measured" in r.reason_codes and "quality.no_face" in r.reason_codes
+
+
+def test_identical_frames_abstain(synth) -> None:
+    ctx = synth.context(kind="genuine", pulse=0.05, seed=1)
+    for name in ("skin", "neck"):
+        rgb = ctx.regions[name].rgb_linear
+        rgb[:] = np.nanmean(rgb, axis=0)  # a still image: nothing changes frame to frame
+    r = _one(ctx)
+    assert r.status == "abstain" and r.reason_codes == ["pulse.not_measured"] and "identical" in r.explanation

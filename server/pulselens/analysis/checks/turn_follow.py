@@ -12,8 +12,11 @@ drops out for part of a turn that was clearly followed is not held against the p
 1. turned the wrong way (wrong peak >= 15 degrees, requested peak < 15): usable, risk 1, `turn.wrong_direction`.
    S2: a YouTube face replayed to the camera moved 24 degrees the wrong way and 12.5 the way asked; the old
    "requested peak < 10" let it abstain as not performed, and the session passed;
-2. turned the right way (peak >= 15): usable, risk 0; `turn.no_return` when it did not come back within 10 degrees
-   by the end (noted, not scored: a person may be slow to turn back);
+2. turned the right way (peak >= 15): usable, risk 0, even if it also went the other way. S2: real heads swing up to
+   38 degrees past centre on the way back, and one turned 18 degrees the wrong way before correcting, so "both ways"
+   cannot tell a swaying replay from a person (a second random prompt, nod or digits, is the answer to that).
+   `turn.no_return` when it did not come back within 10 degrees by the end (noted, not scored: a person may be slow
+   to turn back);
 3. the face is missing for more than 40% of the window: usable, risk 0.6, `turn.face_lost` (a hypothesis: swaps can
    drop the face at large angles; one family flagging leads to a retry, not to a human review);
 4. otherwise the turn was not performed (or only partly): abstain `turn.not_performed`, because a genuine person may
