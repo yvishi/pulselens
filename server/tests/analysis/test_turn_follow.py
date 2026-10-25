@@ -118,3 +118,16 @@ def test_the_turn_window_ignores_the_light_steps(synth) -> None:
 def test_analyze_includes_turn_follow(synth) -> None:
     ids = {r.check_id for r in analyze(synth.session(kind="genuine"))}
     assert "turn.follow" in ids
+
+
+def test_a_frozen_head_is_flagged(synth) -> None:
+    # The synthetic virtual camera has no yaw noise: before the prompt the head does not move at all (S2: a still
+    # image through OBS spanned 0.05 degrees; genuine webcam sessions 0.55-37).
+    r = _one(synth.context(kind="virtual_camera", n_colour=0, turn="left"))
+    assert r.flag and r.risk == 1.0 and r.reason_codes == ["turn.frozen"], r.explanation
+    assert r.features["yaw_spread_deg"] < 0.2
+
+
+def test_a_live_head_is_not_frozen(synth) -> None:
+    r = _one(synth.context(kind="genuine", n_colour=0, turn="left"))
+    assert "turn.frozen" not in r.reason_codes
