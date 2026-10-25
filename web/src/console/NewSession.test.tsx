@@ -42,19 +42,18 @@ describe("NewSession", () => {
   });
   afterEach(cleanup);
 
-  it("sends the chosen product and no_flash", async () => {
+  it("sends the chosen product, with no flash question for the agent", async () => {
     api.createSession.mockResolvedValue({ session_id: "s1", customer_url: "/customer/s1?t=1" });
     renderNew();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "instant_loan" } });
-    fireEvent.click(screen.getByLabelText("No flash"));
     fireEvent.click(screen.getByRole("button", { name: "New session" }));
-    await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan", no_flash: true }));
+    await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ product: "instant_loan" }));
   });
 
-  it("explains the no-flash option in plain words", () => {
+  it("does not ask the agent about flash (the customer chooses that)", () => {
     renderNew();
-    expect(screen.getByLabelText("No flash").getAttribute("aria-describedby")).toBeTruthy();
-    expect(screen.getByText(/sensitive to flashing light/)).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText(/flash/i)).toBeNull();
   });
 
   it("shows the link, draws a QR and copies the link with feedback", async () => {
