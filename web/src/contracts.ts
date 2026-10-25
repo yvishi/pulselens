@@ -185,6 +185,7 @@ export interface CustomerStatus {
 export interface AgentDecision {
   action: AgentAction;
   note?: string;
+  at_ms?: number | null; // set by the engine when it records the action
 }
 
 export interface SessionSummary {
@@ -196,6 +197,7 @@ export interface SessionSummary {
   mode: Mode | null;
   outcome: Outcome | null;
   label_kind: string | null;
+  agent_action?: AgentAction | null;
 }
 
 export interface SessionReport {

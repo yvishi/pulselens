@@ -37,6 +37,7 @@ const FILTERS: { id: ListFilter; label: string }[] = [
 
 /** Does this row belong under the filter? Attention: the agent must act; in progress: still running. */
 export function matchesFilter(r: SessionSummary, f: ListFilter): boolean {
+  if (f === "attention" && r.agent_action && r.agent_action !== "reverify") return false; // approved or escalated: closed
   if (f === "attention") return r.outcome === "HUMAN_REVIEW" || r.outcome === "RETRY_STEP_UP" || (r.state === "done" && r.outcome === null);
   if (f === "progress") return r.state !== "done" && r.state !== "expired";
   return true;
@@ -59,6 +60,8 @@ function ResultCell({ r }: { r: SessionSummary }) {
       <span className="cell-stack">
         <span className={`chip tone-${o.tone}`}>{o.title}</span>
         <span className="code mono">{r.outcome}</span>
+        {r.agent_action === "escalate" && <span className="chip tone-stop">Flagged for fraud</span>}
+        {r.agent_action === "approve" && <span className="chip tone-ok">Approved by agent</span>}
       </span>
     );
   }

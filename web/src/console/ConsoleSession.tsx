@@ -187,6 +187,8 @@ function Review({ sessionId, passcode, onUnauthorized }: { sessionId: string; pa
           <h1>{PRODUCT_PLAIN[report.product]} verification</h1>
           <p className="review-meta">
             <span className="chip">{STATE_PLAIN[report.state]}</span>
+            {report.agent_decision?.action === "escalate" && <span className="chip tone-stop">Flagged for fraud</span>}
+            {report.agent_decision?.action === "approve" && <span className="chip tone-ok">Approved</span>}
             <span>{attemptText(report.attempt)}</span>
             <span className="mono muted">{report.session_id}</span>
           </p>

@@ -13,7 +13,7 @@ vi.mock("qrcode", () => ({ default: { toCanvas: vi.fn().mockResolvedValue(undefi
 vi.mock("../api/client", async (orig) => ({ ...(await orig<typeof import("../api/client")>()), ...api }));
 
 const { ApiError } = await import("../api/client");
-const { ConsoleList, visibleRows } = await import("./ConsoleList");
+const { ConsoleList, matchesFilter, visibleRows } = await import("./ConsoleList");
 const { ConsoleSession } = await import("./ConsoleSession");
 const { FamilyCard } = await import("./FamilyCard");
 const { pickEvidenceFrames } = await import("./EvidenceFrames");
@@ -111,6 +111,23 @@ describe("ConsoleList", () => {
     expect(within(table).getByRole("link", { name: "abc" }).getAttribute("href")).toBe("/console/abc");
     expect(table.textContent).toContain("PASS");
     expect(sessionStorage.getItem("pulselens.agent_passcode")).toBe("secret");
+  });
+
+  it("flags an escalated session and takes closed ones out of Needs attention", async () => {
+    const base: SessionSummary = {
+      session_id: "esc", created_at_ms: 0, product: "savings_account", attempt: 1, state: "done", mode: "CAPABLE",
+      outcome: "HUMAN_REVIEW", label_kind: null, agent_action: "escalate",
+    };
+    expect(matchesFilter(base, "attention")).toBe(false);
+    expect(matchesFilter({ ...base, agent_action: "approve" }, "attention")).toBe(false);
+    expect(matchesFilter({ ...base, agent_action: "reverify" }, "attention")).toBe(true);
+    expect(matchesFilter({ ...base, agent_action: null }, "attention")).toBe(true);
+    api.listSessions.mockResolvedValue([base]);
+    at("/console");
+    enterPasscode("secret");
+    fireEvent.click(await screen.findByRole("button", { name: /^All/ }));
+    const table = await screen.findByRole("table", { name: "Sessions" });
+    expect(table.textContent).toContain("Flagged for fraud");
   });
 
   it("asks again when the passcode is refused", async () => {
@@ -234,6 +251,42 @@ describe("ConsoleSession", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Approve" })));
     expect(api.postAgentDecision).toHaveBeenCalledWith("d79105c5121a3cb3", "pc", { action: "approve", note: "ok" });
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^Approved/));
+  });
+
+  it("approve is clickable once: the buttons lock and the saved time shows", async () => {
+    const saved = { action: "approve" as const, note: "", at_ms: Date.UTC(2026, 9, 25, 9, 30) };
+    api.getResult.mockResolvedValueOnce(REPORT).mockResolvedValue({ ...REPORT, agent_decision: saved });
+    api.postAgentDecision.mockResolvedValue(undefined);
+    at("/console/d79105c5121a3cb3");
+    const approve = await screen.findByRole("button", { name: "Approve" });
+    await act(async () => fireEvent.click(approve));
+    fireEvent.click(approve);
+    expect(api.postAgentDecision).toHaveBeenCalledTimes(1);
+    const time = new Date(saved.at_ms).toLocaleTimeString();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(`Approved at ${time}`));
+    for (const name of ["Approve", "Re-verify", "Escalate to fraud"]) {
+      expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect(screen.getByText(/This decision is final/)).toBeTruthy();
+  });
+
+  it("an escalated session is flagged and every button is locked", async () => {
+    api.getResult.mockResolvedValue({ ...REPORT, agent_decision: { action: "escalate", note: "", at_ms: 1 } });
+    at("/console/d79105c5121a3cb3");
+    const escalate = await screen.findByRole("button", { name: "Escalate to fraud" });
+    expect((escalate as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText("Flagged for fraud").length).toBe(2); // the page header and the decision panel
+    expect(screen.getByRole("status").textContent).toMatch(/^Escalated to fraud at /);
+  });
+
+  it("says so when the server has already recorded a final decision", async () => {
+    api.getResult.mockResolvedValue(REPORT);
+    api.postAgentDecision.mockRejectedValue(new ApiError(409, "already_decided"));
+    at("/console/d79105c5121a3cb3");
+    const approve = await screen.findByRole("button", { name: "Approve" });
+    await act(async () => fireEvent.click(approve));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/already decided/);
   });
 
   describe("live questions card", () => {

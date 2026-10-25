@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { createSession, postAgentDecision } from "../api/client";
+import { ApiError, createSession, postAgentDecision } from "../api/client";
 import type { AgentAction, AgentDecision, Outcome, Product, StepUp } from "../contracts";
 import { CustomerLink, customerLink } from "./NewSession";
 
@@ -16,6 +16,9 @@ const BUTTON: Record<AgentAction, string> = { approve: "btn-ok", reverify: "btn-
 
 /** The button that matches the recommendation. HUMAN_REVIEW has none: the agent must look first. */
 const SUGGESTED: Partial<Record<Outcome, AgentAction>> = { PASS: "approve", RETRY_STEP_UP: "reverify" };
+
+/** Approve and escalate close the session: the server refuses any action after them. Re-verify does not. */
+export const FINAL_ACTIONS: AgentAction[] = ["approve", "escalate"];
 
 /** Only these step-ups are fixed by a new customer link; the others are done by the agent or the bank. */
 const REVERIFY_STEP_UPS: StepUp[] = ["fresh_challenge", "no_flash"];
@@ -45,10 +48,13 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
   const [error, setError] = useState<string | null>(null);
   const [next, setNext] = useState<{ url: string; sessionId: string | null } | null>(null);
   const [at, setAt] = useState<string | null>(null);
+  const [closed, setClosed] = useState<AgentAction | null>(null); // a final action saved here, before the refresh shows it
   const [confirming, setConfirming] = useState(false);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const escalateRef = useRef<HTMLButtonElement>(null);
   const base = outcome ? SUGGESTED[outcome] : undefined;
+  const finalAction = recorded && FINAL_ACTIONS.includes(recorded.action) ? recorded.action : closed;
+  const recordedAt = recorded?.at_ms ? new Date(recorded.at_ms).toLocaleTimeString() : at;
   const suggested = base === "reverify" && !(stepUp && REVERIFY_STEP_UPS.includes(stepUp)) ? undefined : base;
 
   useEffect(() => {
@@ -62,12 +68,18 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
     try {
       await postAgentDecision(sessionId, passcode, { action, note: checksNote ? [note.trim(), checksNote].filter(Boolean).join("\n") : note });
       setAt(new Date().toLocaleTimeString());
+      if (FINAL_ACTIONS.includes(action)) setClosed(action);
       if (action === "reverify") {
         const created = await createSession({ product, previous_session_id: sessionId, no_flash: stepUp === "no_flash" || Boolean(customerNoFlash) });
         setNext({ url: customerLink(window.location.origin, created.customer_url), sessionId: created.session_id ?? null });
       }
       onRecorded();
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.detail === "already_decided") {
+        setError("This verification was already decided, so nothing more was saved.");
+        onRecorded(); // show the decision that is already saved
+        return;
+      }
       setError(`Your decision was not saved: ${e instanceof Error ? e.message : String(e)}. Please try again.`);
     } finally {
       setBusy(false);
@@ -83,11 +95,15 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
     <section className="decide actions card" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>Your decision</h2>
       {recorded ? (
-        <p className="recorded" role="status">
-          {DONE[recorded.action]}
-          {at ? ` at ${at}` : ""}
-          {recorded.note ? `: "${recorded.note}"` : ""}
-        </p>
+        <>
+          {recorded.action === "escalate" && <p className="chip tone-stop flagged">Flagged for fraud</p>}
+          <p className="recorded" role="status">
+            {DONE[recorded.action]}
+            {recordedAt ? ` at ${recordedAt}` : ""}
+            {recorded.note ? `: "${recorded.note}"` : ""}
+          </p>
+          {finalAction && <p className="muted decide-hint">This decision is final. It cannot be changed here.</p>}
+        </>
       ) : (
         <p className="decide-hint">
           {!hasDecision
@@ -108,11 +124,11 @@ export function AgentActions({ sessionId, product, passcode, hasDecision, record
 
       <ul className="choices">
         {ACTIONS.map((a) => {
-          const isSuggested = hasDecision && a === suggested;
+          const isSuggested = hasDecision && !finalAction && a === suggested;
           return (
             <li key={a} className={`choice${isSuggested ? " is-suggested" : ""}`}>
               <button ref={a === "escalate" ? escalateRef : undefined} type="button"
-                className={`btn ${BUTTON[a]} choice-btn action-${a}`} disabled={!hasDecision || busy || confirming}
+                className={`btn ${BUTTON[a]} choice-btn action-${a}`} disabled={!hasDecision || busy || confirming || Boolean(finalAction)}
                 aria-describedby={`${id}-${a}`} onClick={() => (a === "escalate" ? setConfirming(true) : void act(a))}>
                 {LABEL[a]}
               </button>

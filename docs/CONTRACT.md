@@ -40,7 +40,7 @@ Auth:
 | 9 | `GET /api/sessions` | agent | — | `list[SessionSummary]`, newest first | — |
 | 10 | `GET /api/sessions/{id}/result` | agent | — | `SessionReport` (`decision` is null until analysis is done) | — |
 | 11 | `GET /api/sessions/{id}/frames/{idx}.jpg` | agent | — | `image/jpeg` | 404 |
-| 12 | `POST /api/sessions/{id}/agent` | agent | `AgentDecision` | 204 | 409 before a decision exists |
+| 12 | `POST /api/sessions/{id}/agent` | agent | `AgentDecision` | 204 | 409 before a decision exists; 409 `already_decided` after `approve` or `escalate` (both final; `reverify` is not) |
 
 Rules:
 - **Customer responses never contain** `risk`, `flag`, `check_id`, `family`, `outcome` or any score. `CustomerStatus.message` is the only result the customer sees.
@@ -260,6 +260,7 @@ class CustomerStatus(Model):
 class AgentDecision(Model):
     action: AgentAction
     note: str = ""
+    at_ms: int | None = None  # set by the engine when it records the action; clients leave it out
 
 
 class SessionSummary(Model):
@@ -271,6 +272,7 @@ class SessionSummary(Model):
     mode: Mode | None
     outcome: Outcome | None
     label_kind: str | None
+    agent_action: AgentAction | None = None  # the agent's last action, if any
 
 
 class SessionReport(Model):

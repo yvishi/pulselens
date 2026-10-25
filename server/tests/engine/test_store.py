@@ -54,13 +54,15 @@ def test_save_analysis_writes_both_files_audits_and_finishes(tmp_path: Path) -> 
 
 
 def test_record_agent_saves_and_audits(tmp_path: Path) -> None:
-    store = SessionStore(tmp_path / "data")
+    store = SessionStore(tmp_path / "data", clock=lambda: 1_000.0)
     sid = store.create(SessionCreate()).session_id
 
-    store.record_agent(sid, AgentDecision(action="escalate", note="check ID"))
+    saved = store.record_agent(sid, AgentDecision(action="escalate", note="check ID"))
 
     folder = store.path(sid)
-    assert json.loads((folder / "agent.json").read_text(encoding="utf-8")) == {"action": "escalate", "note": "check ID"}
+    expected = {"action": "escalate", "note": "check ID", "at_ms": 1000}
+    assert json.loads((folder / "agent.json").read_text(encoding="utf-8")) == expected
+    assert saved.model_dump() == expected
     rows = [json.loads(line) for line in (folder / "audit.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows[-2]["type"] == "agent.action"
     assert rows[-1]["type"] == "frames.deleted"

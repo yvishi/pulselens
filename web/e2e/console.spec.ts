@@ -97,7 +97,8 @@ test("an agent action is recorded and shows after a reload", async ({ page, requ
   await expect.poll(() => existsSync(agentFile)).toBe(true);
   expect(JSON.parse(readFileSync(agentFile, "utf8"))).toMatchObject({ action: "approve", note: "documents match" });
   await page.reload();
-  await expect(page.getByRole("status")).toContainText('Approved: "documents match"');
+  await expect(page.getByRole("status")).toHaveText(/^Approved at .+: "documents match"$/);
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled(); // final: clickable once
 });
 
 test("new session shows a QR code and a customer link", async ({ page }) => {

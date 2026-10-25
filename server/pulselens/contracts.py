@@ -200,6 +200,7 @@ class CustomerStatus(Model):
 class AgentDecision(Model):
     action: AgentAction
     note: str = ""
+    at_ms: int | None = None  # set by the engine when it records the action; clients leave it out
 
 
 class SessionSummary(Model):
@@ -211,6 +212,7 @@ class SessionSummary(Model):
     mode: Mode | None
     outcome: Outcome | None
     label_kind: str | None
+    agent_action: AgentAction | None = None  # the agent's last action, if any
 
 
 class SessionReport(Model):
