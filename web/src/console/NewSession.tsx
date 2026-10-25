@@ -73,23 +73,20 @@ export function CustomerLink({ url, children }: { url: string; children?: ReactN
   );
 }
 
-/** Agent starts a session: pick product, optionally no flash, then share the link or QR. */
+/** Agent starts a session: pick product, then share the link or QR. */
 export function NewSession() {
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product>("savings_account");
-  const [noFlash, setNoFlash] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; link: string } | null>(null);
   const productId = useId();
-  const flashId = useId();
-  const flashHintId = useId();
 
   const create = async () => {
     setBusy(true);
     setError(null);
     try {
-      const made = await createSession({ product, no_flash: noFlash });
+      const made = await createSession({ product });
       setCreated({ id: made.session_id, link: customerLink(window.location.origin, made.customer_url) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -120,24 +117,6 @@ export function NewSession() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div className="check-option">
-          <input
-            id={flashId}
-            type="checkbox"
-            checked={noFlash}
-            aria-describedby={flashHintId}
-            onChange={(e) => setNoFlash(e.target.checked)}
-          />
-          <div>
-            <label htmlFor={flashId} className="check-label">
-              No flash
-            </label>
-            <p id={flashHintId} className="muted check-hint">
-              For customers who are sensitive to flashing light: they will only be asked to turn their head.
-            </p>
-          </div>
         </div>
 
         <button type="button" className={`btn start-go${created ? "" : " btn-primary"}`} disabled={busy} onClick={() => void create()}>
