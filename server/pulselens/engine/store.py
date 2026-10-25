@@ -36,6 +36,13 @@ Clock = Callable[[], float]  # wall-clock milliseconds
 FINISHED: tuple[SessionState, ...] = ("analysing", "done")  # past /complete: never expires
 
 
+FINAL_ACTIONS = ("approve", "escalate")  # the agent's actions that close a session
+
+
+class AlreadyDecided(Exception):
+    """The agent already approved or escalated this session."""
+
+
 def _wall_ms() -> float:
     return time.time() * 1000
 
@@ -180,9 +187,16 @@ class SessionStore:
             audit.append(folder, "decision.made", decision.model_dump(mode="json"))
             self.set_state(session_id, "done")
 
-    def record_agent(self, session_id: str, decision: AgentDecision) -> None:
-        """agent.json (atomic) and its audit entry, under the lock."""
+    def record_agent(self, session_id: str, decision: AgentDecision) -> AgentDecision:
+        """agent.json (atomic, stamped with the time) and its audit entry, under the lock.
+
+        Approve and escalate are final: after either, any further action raises AlreadyDecided.
+        """
         with self.lock(session_id):
+            previous = self.load(session_id, "agent")
+            if previous and previous.get("action") in FINAL_ACTIONS:
+                raise AlreadyDecided(session_id)
+            decision = decision.model_copy(update={"at_ms": int(self.clock())})
             folder = self.path(session_id)
             self.save_model(session_id, "agent", decision)
             audit.append(folder, "agent.action", decision.model_dump(mode="json"))
@@ -193,6 +207,7 @@ class SessionStore:
                     if frames_dir.exists():
                         shutil.rmtree(frames_dir)
                     audit.append(folder, "frames.deleted", {"at_ms": int(self.clock()), "reason": "privacy_safeguard"})
+        return decision
 
     def has(self, session_id: str, name: str) -> bool:
         return (self.path(session_id) / f"{name}.json").exists()
@@ -278,6 +293,7 @@ class SessionStore:
                 continue
             plan = self.load(folder.name, "plan")
             decision = self.load(folder.name, "decision")
+            agent = self.load(folder.name, "agent")
             mode: Mode | None = Plan.model_validate(plan).mode if plan else None
             outcome = Decision.model_validate(decision).outcome if decision else None
             out.append(
@@ -290,6 +306,7 @@ class SessionStore:
                     mode=mode,
                     outcome=outcome,
                     label_kind=(s.get("label") or {}).get("kind"),
+                    agent_action=AgentDecision.model_validate(agent).action if agent else None,
                 )
             )
         return sorted(out, key=lambda x: x.created_at_ms, reverse=True)

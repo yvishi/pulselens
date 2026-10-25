@@ -72,10 +72,24 @@ def test_agent_action_needs_a_decision_and_is_recorded(client: TestClient, tmp_p
     r = client.post(f"/api/sessions/{sid}/agent", headers=PASS, json={"action": "escalate", "note": "check ID"})
     assert r.status_code == 204
     stored = json.loads((tmp_path / "data" / sid / "agent.json").read_text())
-    assert stored == {"action": "escalate", "note": "check ID"}  # exactly the contract's AgentDecision
-    assert client.get(f"/api/sessions/{sid}/result", headers=PASS).json()["agent_decision"] == {
-        "action": "escalate", "note": "check ID"}
+    assert set(stored) == {"action", "note", "at_ms"}  # exactly the contract's AgentDecision
+    assert stored["action"] == "escalate" and stored["note"] == "check ID" and stored["at_ms"] > 0
+    assert client.get(f"/api/sessions/{sid}/result", headers=PASS).json()["agent_decision"] == stored
     assert client.post(f"/api/sessions/{sid}/agent", headers=PASS, json={"action": "fire"}).status_code == 422
+
+
+def test_approve_and_escalate_are_final_reverify_is_not(client: TestClient, tmp_path: Path) -> None:
+    sid = drive(client)["session_id"]
+    url = f"/api/sessions/{sid}/agent"
+    assert client.post(url, headers=PASS, json={"action": "reverify"}).status_code == 204
+    assert client.post(url, headers=PASS, json={"action": "reverify"}).status_code == 204
+    assert client.post(url, headers=PASS, json={"action": "escalate"}).status_code == 204
+    for action in ("approve", "escalate", "reverify"):
+        r = client.post(url, headers=PASS, json={"action": action})
+        assert r.status_code == 409 and r.json()["detail"] == "already_decided"
+    assert json.loads((tmp_path / "data" / sid / "agent.json").read_text())["action"] == "escalate"
+    row = next(x for x in client.get("/api/sessions", headers=PASS).json() if x["session_id"] == sid)
+    assert row["agent_action"] == "escalate"  # the list shows the session as flagged
 
 
 def test_unknown_session_is_404(client: TestClient) -> None:
