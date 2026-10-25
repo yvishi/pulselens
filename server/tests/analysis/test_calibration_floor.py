@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import pytest
+from scripts.calibrate import calibrate
 
 from pulselens.analysis.thresholds import Thresholds
-from scripts.calibrate import calibrate
 from tests.analysis.test_calibrate import SPEC, _rows
 
 

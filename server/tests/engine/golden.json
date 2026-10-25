@@ -726,7 +726,8 @@
     "Two independent kinds of evidence raised risk, so a person must review it.",
     "Sensor and stream: 100% of frame intervals were within 0.5 ms of 33.3 ms (spread 0.00%), a perfect clock; a hypothesis for virtual cameras. 435 of 446 frames repeated the one before (97.5%; limit 5%).",
     "Light challenge: The face did not answer any of the 6 colour steps, as a recording that never saw this screen would.",
-    "Pulse could not judge: "
+    "Visual and motion: The head did not move at all before the prompt (yaw within 0.00 degrees over 312 frames); a live head always moves a little, a still image or a looped frame does not.",
+    "Pulse could not judge: The face or neck did not change at all over 15 s (identical frames), so there is no pulse to compare. Experimental, not used in the decision; swaps can carry the driver's real pulse (Seibold 2025)."
    ],
    "step_up": null
   },
@@ -817,9 +818,11 @@
    },
    {
     "check_id": "turn.follow",
-    "flag": false,
-    "reason_codes": [],
-    "risk": 0.0,
+    "flag": true,
+    "reason_codes": [
+     "turn.frozen"
+    ],
+    "risk": 1.0,
     "status": "usable"
    },
    {
@@ -841,9 +844,11 @@
    {
     "check_id": "pulse.coherence",
     "flag": false,
-    "reason_codes": [],
-    "risk": 1.0,
-    "status": "usable"
+    "reason_codes": [
+     "pulse.not_measured"
+    ],
+    "risk": null,
+    "status": "abstain"
    }
   ]
  },

@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from scripts.calibrate import MIN_GENUINE, Row, calibrate, main, set_a
 
 from pulselens.analysis import specs
 from pulselens.analysis.result import abstain, result
 from pulselens.analysis.thresholds import Thresholds
-from scripts.calibrate import MIN_GENUINE, Row, calibrate, main, set_a
 
 PROVISIONAL = Thresholds.load(calibrated=Path("missing.yaml"))
 SPEC = specs.LIGHT_RESPONSE

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from eval.convert_v2 import _plan_and_challenge, _session, _steps_and_events, convert
+
 from pulselens.bundle import load_bundle
 
 JPEG = b"\xff\xd8\xff\xd9"

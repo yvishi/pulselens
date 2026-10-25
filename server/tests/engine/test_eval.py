@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from eval.freeze import frozen_ok, write_frozen
 from eval.freeze import main as freeze_main
 from eval.load import EvalSession, load_sessions
@@ -17,6 +16,7 @@ from eval.run import main as run_main
 from eval.run import metrics, refuse, wilson
 from eval.separation import SeparationRow, auc, separation
 from eval.separation import main as separation_main
+
 from pulselens.bundle import write_bundle
 from pulselens.contracts import CheckResult, Decision, FamilySummary, Label, Plan
 from pulselens.engine.fusion import fuse

@@ -47,7 +47,7 @@ def test_result_before_and_after_the_decision(client: TestClient) -> None:
     s = drive(client, complete=False)
     before = client.get(f"/api/sessions/{s['session_id']}/result", headers=PASS).json()
     assert before["decision"] is None and before["frame_count"] == 60 and before["state"] == "capturing"
-    assert before["plan"]["mode"] == "CAPABLE" and len(before["challenge"]["steps"]) == 7
+    assert before["plan"]["mode"] == "CAPABLE" and len(before["challenge"]["steps"]) == 11  # colours, turn, nod, digits
     done = drive(client)
     report = client.get(f"/api/sessions/{done['session_id']}/result", headers=PASS).json()
     assert report["state"] == "done" and report["decision"]["outcome"] == "PASS"
